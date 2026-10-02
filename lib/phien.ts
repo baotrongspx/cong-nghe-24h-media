@@ -1,5 +1,6 @@
 import 'server-only'
 import { createHmac, timingSafeEqual } from 'node:crypto'
+import { cache } from 'react'
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { db } from '@/lib/db'
@@ -56,23 +57,17 @@ export type NguoiDung = {
 }
 
 // Dùng ở trang/hành động cần đăng nhập: trả về người dùng, gói đang hiệu lực và các page đang quản lý (trong giới hạn gói)
-export async function batBuocDangNhap() {
+// cache(): layout và page cùng gọi trong một lần tải trang thì chỉ truy vấn một lần
+export const batBuocDangNhap = cache(async () => {
   const id = await nguoiDungId()
   if (!id) redirect('/dang-nhap')
-  const { data: nd } = await db()
-    .from('nguoi_dung')
-    .select('id, ten, anh, goi, het_han, bi_khoa, la_quan_tri')
-    .eq('id', id)
-    .maybeSingle<NguoiDung>()
+  const [{ data: nd }, { data }] = await Promise.all([
+    db().from('nguoi_dung').select('id, ten, anh, goi, het_han, bi_khoa, la_quan_tri').eq('id', id).maybeSingle<NguoiDung>(),
+    db().from('trang_quan_tri').select('trang_id, vai_tro, moi_boi, chi_xem_cua_minh').eq('nguoi_dung_id', id).eq('bat', true).order('trang_id'),
+  ])
   if (!nd) redirect('/dang-nhap')
   if (nd.bi_khoa) redirect('/bi-khoa')
   const { goi, daHet } = goiHieuLuc(nd)
-  const { data } = await db()
-    .from('trang_quan_tri')
-    .select('trang_id, vai_tro, moi_boi, chi_xem_cua_minh')
-    .eq('nguoi_dung_id', id)
-    .eq('bat', true)
-    .order('trang_id')
   const dong = data ?? []
   // Page mình là chủ: tính vào giới hạn gói của mình. Page được mời làm nhân viên: theo gói của người mời.
   const trangChu = dong.filter((r) => r.vai_tro !== 'nhan_vien').map((r) => r.trang_id as string).slice(0, goi.soTrang)
@@ -83,7 +78,7 @@ export async function batBuocDangNhap() {
   // Chủ của mình (để dùng chung thẻ, mẫu câu)
   const chuIds = [...new Set(trangNhanVien.map((r) => r.moi_boi as string).filter(Boolean))]
   return { nguoiDung: nd, goi, daHet, trangIds, trangChu, chiCuaMinh, chuIds }
-}
+})
 
 // Bộ lọc hội thoại mình được xem (dùng với .or() của Supabase)
 export function locHoiThoai(p: { trangIds: string[]; chiCuaMinh: string[]; nguoiDung: { id: string } }) {

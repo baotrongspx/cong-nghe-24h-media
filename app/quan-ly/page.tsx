@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { after } from 'next/server'
 import { db } from '@/lib/db'
 import { batBuocDangNhap, locHoiThoai } from '@/lib/phien'
 import { ChonPhuTrach, ChonThe, KhungTraLoi, LamMoi, NutAnHien, NutChuaDoc, SoDienThoai } from './HopThuClient'
@@ -85,6 +86,10 @@ export default async function HopThu({ searchParams }: PageProps<'/quan-ly'>) {
 
   // Thẻ, mẫu câu: của mình + của chủ shop (nếu mình là nhân viên)
   const nhom = [nguoiDung.id, ...chuIds]
+  // Tin của hội thoại đang mở: tải song song luôn, chỉ dùng nếu người dùng có quyền xem hội thoại đó (kiểm tra bên dưới)
+  const layTin = h
+    ? db().from('tin').select('id, chieu, noi_dung, dinh_kem, da_an, tao_luc, nguoi_gui_id').eq('hoi_thoai_id', h).order('tao_luc', { ascending: false }).limit(200).then((r) => r.data)
+    : null
   const [{ data: dsHt }, { data: dsTrang }, { data: dsThe }, { data: dsMau }, { data: dsThanhVien }] = await Promise.all([
     truyVan,
     db().from('fb_trang').select('id, ten, anh').in('id', trangIds),
@@ -110,15 +115,12 @@ export default async function HopThu({ searchParams }: PageProps<'/quan-ly'>) {
     dangMo = data as HoiThoai | null
   }
   let tin: Tin[] = []
-  if (dangMo) {
-    const { data } = await db()
-      .from('tin')
-      .select('id, chieu, noi_dung, dinh_kem, da_an, tao_luc, nguoi_gui_id')
-      .eq('hoi_thoai_id', dangMo.id)
-      .order('tao_luc', { ascending: false })
-      .limit(200)
+  if (dangMo && layTin) {
+    const data = await layTin
     tin = ((data ?? []) as Tin[]).reverse()
-    if (dangMo.chua_doc) await db().from('hoi_thoai').update({ chua_doc: 0 }).eq('id', dangMo.id)
+    // Đánh dấu đã đọc sau khi đã trả trang, không bắt người dùng chờ
+    const id = dangMo.id
+    if (dangMo.chua_doc) after(() => db().from('hoi_thoai').update({ chua_doc: 0 }).eq('id', id))
   }
 
   return (
