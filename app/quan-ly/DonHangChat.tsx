@@ -92,6 +92,7 @@ function TheDon({ d, sua }: { d: DonHang; sua: () => void }) {
     <div className={`rounded-xl border border-slate-200 p-3 text-sm ${dang ? 'opacity-60' : ''}`}>
       <div className="flex items-center gap-2">
         <span className="font-semibold">#{d.ma}</span>
+        {!d.nguoi_tao_id && <span className="rounded bg-violet-100 px-1.5 py-0.5 text-[11px] font-semibold text-violet-700" title="Trợ lý AI tự lên đơn khi khách chốt trong chat">AI chốt</span>}
         <select
           value={d.trang_thai}
           disabled={dang}

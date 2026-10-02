@@ -1,6 +1,7 @@
 import 'server-only'
 import { db } from '@/lib/db'
-import { coKhoaGemini, hoiGemini, type TinHoiThoai } from '@/lib/gemini'
+import { tongDon } from '@/lib/donHang'
+import { coKhoaGemini, hoiGemini, type DonAi, type TinHoiThoai } from '@/lib/gemini'
 
 export type CaiDatAi = {
   trang_id: string
@@ -15,6 +16,45 @@ export type CaiDatAi = {
 // Ca khó (phàn nàn, câu hỏi ngoài thông tin shop, khách chốt đơn): AI vẫn trả lời, chỉ gắn thẻ này để nhân viên theo dõi.
 // AI không bao giờ tự dừng; nhân viên muốn tự chăm khách thì bấm tạm dừng AI trong Hộp thư.
 export const THE_CAN_NGUOI = 'Cần tư vấn'
+
+export const THE_DA_CHOT = 'Đã chốt đơn'
+
+// Lưu đơn AI vừa chốt (đơn AI = không có người tạo). Khách sửa thông tin trong 24 giờ thì cập nhật đơn AI đang "Mới", không tạo đơn trùng.
+export async function luuDonAi(p: { trangId: string; hoiThoaiId: string; don: DonAi }) {
+  const giaTri = {
+    khach_ten: p.don.khachTen,
+    so_dien_thoai: p.don.soDienThoai,
+    dia_chi: p.don.diaChi,
+    san_pham: p.don.sanPham,
+    phi_ship: p.don.phiShip,
+    giam_gia: 0,
+    tong: tongDon({ san_pham: p.don.sanPham, phi_ship: p.don.phiShip, giam_gia: 0 }),
+    ghi_chu: p.don.ghiChu,
+    cap_nhat_luc: new Date().toISOString(),
+  }
+  const tu = new Date(Date.now() - 24 * 3600_000).toISOString()
+  const { data: cu } = await db()
+    .from('don_hang')
+    .select('id')
+    .eq('hoi_thoai_id', p.hoiThoaiId)
+    .is('nguoi_tao_id', null)
+    .eq('trang_thai', 'moi')
+    .gte('tao_luc', tu)
+    .order('tao_luc', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  const { error } = cu
+    ? await db().from('don_hang').update(giaTri).eq('id', cu.id)
+    : await db().from('don_hang').insert({ ...giaTri, trang_id: p.trangId, hoi_thoai_id: p.hoiThoaiId })
+  if (error) throw new Error(`Lưu đơn AI lỗi: ${error.message}`)
+  // Hội thoại: lưu SĐT nếu chưa có, gắn thẻ "Đã chốt đơn"
+  const { data: ht } = await db().from('hoi_thoai').select('so_dien_thoai, the').eq('id', p.hoiThoaiId).maybeSingle()
+  const the = (ht?.the as string[] | undefined) ?? []
+  await db()
+    .from('hoi_thoai')
+    .update({ ...(ht?.so_dien_thoai ? {} : { so_dien_thoai: p.don.soDienThoai }), ...(the.includes(THE_DA_CHOT) ? {} : { the: [...the, THE_DA_CHOT] }) })
+    .eq('id', p.hoiThoaiId)
+}
 
 export type MauTraLoi = { tuKhoa: string[]; traLoi: string }
 
@@ -46,6 +86,7 @@ QUY TẮC:
 - Trả lời ngắn gọn như người thật nhắn tin: 1–3 câu, không dùng markdown, không gạch đầu dòng dài.
 - Không bịa giá, khuyến mãi, tồn kho, chính sách nếu THÔNG TIN SHOP không có.
 - Khi khách muốn mua: hỏi sản phẩm, size/màu/dung lượng, số lượng, họ tên, số điện thoại, địa chỉ nhận hàng (hỏi những gì còn thiếu).
+- CHỐT ĐƠN: khi khách đã đồng ý mua và trong cuộc trò chuyện đã có ĐỦ sản phẩm, số lượng, họ tên, số điện thoại, địa chỉ nhận hàng → điền don_hang (giá và phí ship lấy theo THÔNG TIN SHOP), và trong tra_loi xác nhận lại đơn: sản phẩm, số lượng, tổng tiền, tên, SĐT, địa chỉ; báo shop đã lên đơn và sẽ gọi xác nhận. Khách sửa thông tin sau khi chốt → điền lại don_hang đầy đủ với thông tin mới. Chưa đủ thông tin hoặc khách chưa chốt → don_hang = null.
 - Không hứa điều shop không nêu. Không nhắc rằng bạn là AI trừ khi khách hỏi thẳng.
 ${
   p.toanQuyen
@@ -54,17 +95,16 @@ ${
   · Khách gửi ảnh, sticker → hỏi khách quan tâm sản phẩm nào / cần shop hỗ trợ gì.
   · Câu hỏi ngoài thông tin shop → nói shop ghi nhận và sẽ kiểm tra rồi báo lại khách sớm, xin số điện thoại nếu chưa có.
   · Phàn nàn, đổi trả, hàng lỗi → xin lỗi, xin mã đơn / ảnh sản phẩm / số điện thoại, hứa shop xử lý ngay.
-  · Khách gửi đủ thông tin đặt hàng → xác nhận lại đơn và báo shop sẽ gọi xác nhận.
-- Đặt can_nguoi_that = true (chỉ để nhân viên theo dõi, bạn vẫn trả lời bình thường) khi: phàn nàn, đổi trả, câu hỏi ngoài thông tin shop, hoặc khách vừa gửi đủ thông tin đặt hàng.`
+- Đặt can_nguoi_that = true (chỉ để nhân viên theo dõi, bạn vẫn trả lời bình thường) khi: phàn nàn, đổi trả, hoặc câu hỏi ngoài thông tin shop.`
     : `- Khi không chắc, nói shop sẽ kiểm tra và báo lại ngay, xin số điện thoại nếu chưa có.
-- Đặt can_nguoi_that = true (để nhân viên theo dõi, bạn vẫn trả lời bình thường) khi: khách phàn nàn, đổi trả, hỏi điều ngoài thông tin shop, muốn gặp người thật, hoặc đã gửi đủ thông tin đặt hàng.`
+- Đặt can_nguoi_that = true (để nhân viên theo dõi, bạn vẫn trả lời bình thường) khi: khách phàn nàn, đổi trả, hỏi điều ngoài thông tin shop, hoặc muốn gặp người thật.`
 }${
     p.loai === 'binh_luan'
       ? '\n- Đây là trả lời CÔNG KHAI dưới bình luận: thật ngắn (1–2 câu), không ghi giá chi tiết, số điện thoại hay địa chỉ của khách; mời khách nhắn tin cho shop để được tư vấn.'
       : ''
   }${p.khachTen ? `\n- Tên khách: ${p.khachTen}.` : ''}
 
-Trả về JSON: {"tra_loi": "...", "can_nguoi_that": true/false}.`
+Trả về JSON: {"tra_loi": "...", "can_nguoi_that": true/false, "don_hang": null hoặc {...}}.`
 }
 
 // Cài đặt AI của Page (null nếu chưa có bảng / chưa bật)
@@ -139,6 +179,14 @@ export async function traLoiBangAi(p: {
     loiDanAi({ tenTrang: p.tenTrang, thongTin: cd.thong_tin, cachNoi: cd.cach_noi, loai: p.loai, khachTen: p.khachTen ?? ht?.khach_ten, toanQuyen, mau: p.mau }),
     hoiThoai,
   )
+  // Khách chốt đơn đủ thông tin: tự lên đơn (lỗi thì vẫn gửi câu trả lời, nhân viên lên đơn tay)
+  if (kq.donHang) {
+    try {
+      await luuDonAi({ trangId: p.trangId, hoiThoaiId: p.hoiThoaiId, don: kq.donHang })
+    } catch (e) {
+      console.error('Tự lên đơn lỗi:', e)
+    }
+  }
   if (kq.canNguoiThat) {
     // Gắn thẻ cho nhân viên theo dõi (AI vẫn trả lời tiếp)
     const the = (ht?.the as string[] | undefined) ?? []

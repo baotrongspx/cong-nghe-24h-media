@@ -2,6 +2,8 @@
 
 import { useState, useTransition } from 'react'
 import type { ApDung } from '@/lib/tuDong'
+import { tien, tongDon } from '@/lib/donHang'
+import type { DonAi } from '@/lib/gemini'
 import { luuTroLyAi, thuTroLyAi } from '../actions'
 import { IAi } from '../BieuTuong'
 import { PhanDoan, oNhap } from './KichBanClient'
@@ -99,7 +101,7 @@ function FormAi({ trangId, dau, coKhoa }: { trangId: string; dau: CaiDatAiView; 
   const [dangLuu, luu] = useTransition()
 
   const [cauHoi, setCauHoi] = useState('Áo thun còn size M màu đen không shop? Giá bao nhiêu?')
-  const [thu, setThu] = useState<{ traLoi?: string; canNguoiThat?: boolean; loi?: string } | null>(null)
+  const [thu, setThu] = useState<{ traLoi?: string; canNguoiThat?: boolean; donHang?: DonAi | null; loi?: string } | null>(null)
   const [dangThu, chayThu] = useTransition()
 
   const luuLai = () =>
@@ -208,7 +210,7 @@ function FormAi({ trangId, dau, coKhoa }: { trangId: string; dau: CaiDatAiView; 
             if (!cauHoi.trim()) return
             chayThu(async () => {
               const r = await thuTroLyAi({ trangId, thongTin: g.thong_tin, cachNoi: g.cach_noi, loai: g.ap_dung === 'binh_luan' ? 'binh_luan' : 'tin_nhan', cauHoi, toanQuyen: !!g.toan_quyen })
-              setThu(r.ok ? { traLoi: r.traLoi, canNguoiThat: r.canNguoiThat } : { loi: r.thongBao })
+              setThu(r.ok ? { traLoi: r.traLoi, canNguoiThat: r.canNguoiThat, donHang: r.donHang } : { loi: r.thongBao })
             })
           }}
           className="mt-2 flex gap-2"
@@ -226,6 +228,21 @@ function FormAi({ trangId, dau, coKhoa }: { trangId: string; dau: CaiDatAiView; 
             ) : (
               <>
                 <p className="ml-auto w-fit max-w-[85%] whitespace-pre-wrap rounded-2xl bg-chinh px-3 py-2 text-sm text-white">{thu.traLoi}</p>
+                {thu.donHang && (
+                  <div className="ml-auto max-w-[85%] rounded-lg border border-violet-200 bg-violet-50 p-2.5 text-xs">
+                    <p className="font-semibold text-violet-800">Khi chạy thật, AI sẽ tự lên đơn này:</p>
+                    {thu.donHang.sanPham.map((x, i) => (
+                      <p key={i}>
+                        {x.ten} × {x.sl} — {tien(x.gia * x.sl)}
+                      </p>
+                    ))}
+                    {thu.donHang.phiShip > 0 && <p>Phí ship: {tien(thu.donHang.phiShip)}</p>}
+                    <p className="font-semibold">Tổng: {tien(tongDon({ san_pham: thu.donHang.sanPham, phi_ship: thu.donHang.phiShip, giam_gia: 0 }))}</p>
+                    <p className="text-phu">
+                      {thu.donHang.khachTen} · {thu.donHang.soDienThoai} · {thu.donHang.diaChi}
+                    </p>
+                  </div>
+                )}
                 {thu.canNguoiThat && (
                   <p className="text-right text-xs text-amber-700">AI vẫn trả lời tiếp, và gắn thẻ “Cần tư vấn” để nhân viên theo dõi.</p>
                 )}

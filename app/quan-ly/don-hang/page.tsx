@@ -153,7 +153,7 @@ export default async function TrangDonHang({ searchParams }: PageProps<'/quan-ly
               {don.map((d) => (
                 <tr key={d.id} className="align-top">
                   <td className="px-3 py-2">
-                    <p className="font-semibold">#{d.ma}</p>
+                    <p className="flex items-center gap-1.5 font-semibold">#{d.ma}{!d.nguoi_tao_id && <span className="rounded bg-violet-100 px-1.5 py-0.5 text-[11px] font-semibold text-violet-700" title="Trợ lý AI tự lên đơn khi khách chốt trong chat">AI chốt</span>}</p>
                     <p className="text-xs text-phu">{gio(d.tao_luc)}</p>
                     {trang.length > 1 && <p className="text-xs text-phu">{tenTrang.get(d.trang_id)}</p>}
                   </td>
