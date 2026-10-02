@@ -13,6 +13,7 @@ export const QUYEN = [
   'pages_manage_engagement',
   'pages_manage_metadata',
   'pages_read_user_content',
+  'pages_manage_posts',
   'business_management',
 ]
 
@@ -172,4 +173,33 @@ export function timSoDienThoai(s: string | null | undefined) {
   const m = s.match(/(?:\+?84|0)(?:[\s.-]?\d){9}(?!\d)/)
   if (!m) return null
   return m[0].replace(/[^\d]/g, '').replace(/^84/, '0')
+}
+
+// ---- Đăng bài lên Fanpage ----
+// Tải ảnh (theo URL công khai) lên page ở dạng chưa đăng, trả về id để gắn vào bài viết.
+// temporary=true bắt buộc khi bài được hẹn giờ.
+export async function taiAnhLenTrang(pageToken: string, trangId: string, url: string, henGio: boolean) {
+  const r = await graph<{ id: string }>(`${trangId}/photos`, {
+    method: 'POST',
+    access_token: pageToken,
+    url,
+    published: false,
+    ...(henGio ? { temporary: true } : {}),
+  })
+  return r.id
+}
+
+// Đăng bài (kèm ảnh đã tải) ngay hoặc hẹn giờ bằng tính năng lên lịch của Facebook (10 phút đến 29 ngày)
+export function dangBaiTrang(pageToken: string, trangId: string, p: { noiDung: string; anhIds: string[]; henLuc?: Date }) {
+  const thamSo: Record<string, string | number | boolean> = { method: 'POST', access_token: pageToken, message: p.noiDung }
+  p.anhIds.forEach((id, i) => (thamSo[`attached_media[${i}]`] = JSON.stringify({ media_fbid: id })))
+  if (p.henLuc) {
+    thamSo.published = false
+    thamSo.scheduled_publish_time = Math.floor(p.henLuc.getTime() / 1000)
+  }
+  return graph<{ id: string }>(`${trangId}/feed`, thamSo as ThamSo & { method: 'POST' })
+}
+
+export function xoaBaiTrang(pageToken: string, postId: string) {
+  return graph(postId, { method: 'DELETE', access_token: pageToken })
 }

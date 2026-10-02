@@ -135,3 +135,43 @@ create table if not exists loi_moi (
   da_dung_boi text references nguoi_dung(id) on delete set null
 );
 alter table loi_moi enable row level security;
+
+-- ============ Đăng bài Fanpage & trợ lý đăng nhóm ============
+create table if not exists bai_viet (
+  id uuid primary key default gen_random_uuid(),
+  nguoi_dung_id text not null references nguoi_dung(id) on delete cascade,
+  noi_dung text not null default '',
+  anh text[] not null default '{}',          -- URL ảnh công khai (Supabase Storage)
+  tao_luc timestamptz not null default now()
+);
+-- Mỗi lần đăng / hẹn giờ lên một Fanpage
+create table if not exists dang_trang (
+  id uuid primary key default gen_random_uuid(),
+  bai_viet_id uuid not null references bai_viet(id) on delete cascade,
+  trang_id text not null references fb_trang(id) on delete cascade,
+  hen_luc timestamptz,                         -- null = đăng ngay
+  fb_post_id text,
+  trang_thai text not null check (trang_thai in ('da_dang', 'da_hen', 'loi', 'da_huy')),
+  loi text,
+  tao_luc timestamptz not null default now()
+);
+-- Nhóm Facebook người dùng đã tham gia (tự nhập), và lịch sử đã đăng tay vào nhóm
+create table if not exists nhom_fb (
+  id uuid primary key default gen_random_uuid(),
+  nguoi_dung_id text not null references nguoi_dung(id) on delete cascade,
+  ten text not null,
+  link text not null,
+  ghi_chu text,
+  tao_luc timestamptz not null default now()
+);
+create table if not exists dang_nhom (
+  id uuid primary key default gen_random_uuid(),
+  nhom_id uuid not null references nhom_fb(id) on delete cascade,
+  bai_viet_id uuid not null references bai_viet(id) on delete cascade,
+  nguoi_dung_id text not null references nguoi_dung(id) on delete cascade,
+  dang_luc timestamptz not null default now()
+);
+alter table bai_viet enable row level security;
+alter table dang_trang enable row level security;
+alter table nhom_fb enable row level security;
+alter table dang_nhom enable row level security;

@@ -18,9 +18,12 @@ const TINH_NANG = [
   ['🏷️', 'Gắn thẻ & lọc khách', 'Phân loại Đã chốt, Hỏi giá, Bom hàng… Lọc theo thẻ, theo Page, chưa đọc, có SĐT.'],
   ['💬', 'Trả lời công khai hoặc nhắn riêng', 'Trả lời ngay dưới bình luận hoặc nhắn thẳng vào inbox của người bình luận.'],
   ['🗂️', 'Quản lý nhiều Fanpage', 'Kết nối nhiều Page trên một tài khoản, bật tắt từng Page, cài đặt riêng cho từng Page.'],
+  ['🗓️', 'Đăng bài & hẹn giờ', 'Soạn một lần, đăng ngay hoặc hẹn giờ lên nhiều Fanpage cùng lúc, kèm nhiều ảnh.'],
+  ['👥', 'Trợ lý đăng nhóm', 'Lưu danh sách nhóm, chép sẵn bài và mở đúng nhóm, đánh dấu nhóm đã đăng để không trùng. An toàn cho nick.'],
+  ['🧑‍💼', 'Nhân viên & chia hội thoại', 'Mời nhân viên, chia khách tự động xoay vòng hoặc thủ công, xem ai đã trả lời khách.'],
 ]
 
-const SAP_CO = ['Tạo đơn hàng ngay trong khung chat', 'Chốt đơn tự động khi livestream', 'Nhân viên & chia hội thoại', 'Báo cáo tin nhắn, đơn hàng, doanh thu', 'Zalo OA, Instagram, TikTok']
+const SAP_CO = ['Tạo đơn hàng ngay trong khung chat', 'Chốt đơn tự động khi livestream', 'Báo cáo tin nhắn, đơn hàng, doanh thu', 'Zalo OA, Instagram, TikTok']
 
 const BUOC = [
   ['Đăng nhập bằng Facebook', 'Không cần tạo tài khoản, không cần cài đặt phần mềm.'],
