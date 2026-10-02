@@ -236,7 +236,7 @@ export async function xoaTuDong(id: string) {
 }
 
 // ---- Trợ lý AI (Gemini) ----
-type CaiDatAiForm = { trangId: string; bat: boolean; apDung: ApDung; thongTin: string; cachNoi: string; nghiGio: number }
+type CaiDatAiForm = { trangId: string; bat: boolean; apDung: ApDung; thongTin: string; cachNoi: string; nghiGio: number; toanQuyen: boolean }
 
 export async function luuTroLyAi(d: CaiDatAiForm): Promise<KetQua> {
   try {
@@ -252,9 +252,10 @@ export async function luuTroLyAi(d: CaiDatAiForm): Promise<KetQua> {
         thong_tin: d.thongTin.trim().slice(0, 20000),
         cach_noi: d.cachNoi.trim().slice(0, 2000),
         nghi_gio: Math.min(48, Math.max(0, Math.round(d.nghiGio) || 0)),
+        toan_quyen: d.toanQuyen,
         cap_nhat_luc: new Date().toISOString(),
       })
-    if (error) return { ok: false, thongBao: /tro_ly_ai/.test(error.message) ? 'Cơ sở dữ liệu chưa cập nhật: hãy chạy lại file supabase/schema.sql trong Supabase.' : error.message }
+    if (error) return { ok: false, thongBao: /tro_ly_ai|toan_quyen/.test(error.message) ? 'Cơ sở dữ liệu chưa cập nhật: hãy chạy lại file supabase/schema.sql trong Supabase.' : error.message }
     revalidatePath('/quan-ly/tu-dong')
     return { ok: true }
   } catch (e) {
@@ -263,12 +264,19 @@ export async function luuTroLyAi(d: CaiDatAiForm): Promise<KetQua> {
 }
 
 // Thử hỏi AI với nội dung đang soạn (chưa cần lưu). Không gửi gì cho khách.
-export async function thuTroLyAi(d: { trangId: string; thongTin: string; cachNoi: string; loai: 'tin_nhan' | 'binh_luan'; cauHoi: string }) {
+export async function thuTroLyAi(d: { trangId: string; thongTin: string; cachNoi: string; loai: 'tin_nhan' | 'binh_luan'; cauHoi: string; toanQuyen: boolean }) {
   try {
     await kiemTraTrang(d.trangId)
     if (!coKhoaGemini()) return { ok: false as const, thongBao: 'Máy chủ chưa cài GEMINI_API_KEY' }
-    const { data: t } = await db().from('fb_trang').select('ten').eq('id', d.trangId).single()
-    const kq = await thuAi({ thong_tin: d.thongTin, cach_noi: d.cachNoi, tenTrang: t?.ten ?? 'Shop', loai: d.loai }, [{ vai: 'khach', noiDung: d.cauHoi.slice(0, 1000) }])
+    const [{ data: t }, { data: kb }] = await Promise.all([
+      db().from('fb_trang').select('ten').eq('id', d.trangId).single(),
+      db().from('tu_dong').select('*').eq('trang_id', d.trangId).eq('bat', true),
+    ])
+    // Chế độ trả lời mọi tình huống: kịch bản từ khóa thành câu mẫu cho AI (giống khi chạy thật)
+    const mau = d.toanQuyen
+      ? ((kb ?? []) as { tu_khoa: string[]; tra_loi: string; nhan_rieng?: string }[]).filter((k) => k.tu_khoa.length).map((k) => ({ tuKhoa: k.tu_khoa, traLoi: k.tra_loi || k.nhan_rieng || '' }))
+      : []
+    const kq = await thuAi({ thong_tin: d.thongTin, cach_noi: d.cachNoi, tenTrang: t?.ten ?? 'Shop', loai: d.loai, toanQuyen: d.toanQuyen, mau }, [{ vai: 'khach', noiDung: d.cauHoi.slice(0, 1000) }])
     return { ok: true as const, ...kq }
   } catch (e) {
     return { ok: false as const, thongBao: e instanceof Error ? e.message : 'Có lỗi xảy ra' }

@@ -1,7 +1,7 @@
 import 'server-only'
 import { db } from '@/lib/db'
 import { anBinhLuan, guiTinNhan, nhanRiengBinhLuan, tenKhach, timSoDienThoai, traLoiBinhLuan } from '@/lib/facebook'
-import { traLoiBangAi } from '@/lib/troLyAi'
+import { aiApDung, caiDatAiCuaTrang, traLoiBangAi } from '@/lib/troLyAi'
 import { GIO_CHO_TRA_LOI_MOI_TIN, chonKichBan, thayTen, type KichBan } from '@/lib/tuDong'
 
 export type Trang = {
@@ -101,17 +101,25 @@ export async function luuTin(t: TinMoi) {
 }
 
 // Tìm câu tự trả lời theo thứ tự: kịch bản từ khóa → trợ lý AI (Gemini) → kịch bản "mọi tin"
-// (kịch bản "mọi tin" chỉ gửi nếu shop chưa nhắn gì cho khách trong GIO_CHO_TRA_LOI_MOI_TIN giờ)
+// (kịch bản "mọi tin" chỉ gửi nếu shop chưa nhắn gì cho khách trong GIO_CHO_TRA_LOI_MOI_TIN giờ).
+// AI ở chế độ "trả lời mọi tình huống": AI trả lời trước mọi tin, kịch bản từ khóa thành câu mẫu cho AI.
 async function timTraLoiTuDong(p: { trang: Trang; loai: 'tin_nhan' | 'binh_luan'; noiDung: string | null; hoiThoaiId: string; khachTen?: string | null }) {
   // select('*'): vẫn chạy khi chưa thêm cột mới (nhan_rieng, tao_luc) vào cơ sở dữ liệu
   const { data } = await db().from('tu_dong').select('*').eq('trang_id', p.trang.id).eq('bat', true).in('ap_dung', [p.loai, 'ca_hai'])
   const ds = ((data ?? []) as KichBan[]).sort((a, b) => (a.tao_luc ?? '').localeCompare(b.tao_luc ?? ''))
   const chon = chonKichBan(ds, p.loai, p.noiDung)
-  if (!chon || chon.moiTin) {
-    // Không khớp từ khóa nào: thử trợ lý AI trước (lỗi thì bỏ qua, dùng kịch bản "mọi tin")
+  const cd = await caiDatAiCuaTrang(p.trang.id)
+  const toanQuyen = !!cd?.toan_quyen && aiApDung(cd, p.loai)
+  if (toanQuyen || !chon || chon.moiTin) {
+    // AI trả lời (lỗi hoặc AI không trả lời thì dùng kịch bản như bình thường)
     try {
-      const ai = await traLoiBangAi({ trangId: p.trang.id, tenTrang: p.trang.ten, loai: p.loai, hoiThoaiId: p.hoiThoaiId, khachTen: p.khachTen })
-      if (ai) return { traLoi: ai, nhanRieng: '' }
+      const mau = ds.filter((k) => k.tu_khoa.length).map((k) => ({ tuKhoa: k.tu_khoa, traLoi: k.tra_loi || k.nhan_rieng || '' }))
+      const ai = await traLoiBangAi({ trangId: p.trang.id, tenTrang: p.trang.ten, loai: p.loai, hoiThoaiId: p.hoiThoaiId, khachTen: p.khachTen, caiDat: cd, mau })
+      if (ai) {
+        // Bình luận khớp kịch bản có nhắn riêng: vẫn nhắn riêng theo kịch bản, AI trả lời công khai
+        const nhanRieng = chon && !chon.moiTin ? thayTen(chon.kb.nhan_rieng ?? '', p.khachTen).trim() : ''
+        return { traLoi: ai, nhanRieng }
+      }
     } catch (e) {
       console.error('Trợ lý AI lỗi:', e)
     }

@@ -337,3 +337,6 @@ create table if not exists tro_ly_ai (
 alter table tro_ly_ai enable row level security;
 -- AI tạm dừng với hội thoại này tới thời điểm này (khách cần người thật, hoặc nhân viên tự tắt)
 alter table hoi_thoai add column if not exists ai_tam_dung_den timestamptz;
+-- AI trả lời mọi tình huống: đứng trước kịch bản từ khóa (dùng chúng làm câu mẫu), không im lặng khi nhân viên vừa trả lời,
+-- không tự dừng khi gặp ca khó (chỉ gắn thẻ "Cần tư vấn"). Nút tạm dừng AI theo từng khách trong Hộp thư vẫn có tác dụng.
+alter table tro_ly_ai add column if not exists toan_quyen boolean not null default false;
