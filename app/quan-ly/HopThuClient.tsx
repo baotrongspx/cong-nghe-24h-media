@@ -2,7 +2,7 @@
 
 import { useActionState, useEffect, useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
-import { anHienBinhLuan, danhDauChuaDoc, datThe, giaoHoiThoai, luuSoDienThoai, traLoi } from './actions'
+import { anHienBinhLuan, danhDauChuaDoc, datAiHoiThoai, datThe, giaoHoiThoai, luuSoDienThoai, traLoi } from './actions'
 
 // Tải lại dữ liệu mỗi 5 giây khi tab đang mở để thấy tin mới (webhook đã lưu sẵn vào cơ sở dữ liệu)
 export function LamMoi() {
@@ -200,6 +200,21 @@ export function NutChuaDoc({ hoiThoaiId }: { hoiThoaiId: string }) {
       title="Đánh dấu chưa đọc"
     >
       ✉️
+    </button>
+  )
+}
+
+// Bật / tạm dừng trợ lý AI với riêng hội thoại này (vd. nhân viên muốn tự chăm khách)
+export function NutAi({ hoiThoaiId, tamDung }: { hoiThoaiId: string; tamDung: boolean }) {
+  const [dang, chay] = useTransition()
+  return (
+    <button
+      disabled={dang}
+      onClick={() => chay(() => datAiHoiThoai(hoiThoaiId, tamDung))}
+      title={tamDung ? 'AI đang tạm dừng với khách này. Bấm để AI trả lời lại.' : 'AI đang trả lời khách này. Bấm để tạm dừng, nhân viên tự chăm.'}
+      className={`rounded-md border px-2 py-1 text-sm disabled:opacity-50 ${tamDung ? 'border-slate-300 text-phu hover:bg-slate-50' : 'border-violet-300 bg-violet-50 text-violet-700 hover:bg-violet-100'}`}
+    >
+      {tamDung ? 'AI: tạm dừng' : '✦ AI đang trả lời'}
     </button>
   )
 }

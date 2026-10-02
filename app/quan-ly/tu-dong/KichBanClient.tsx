@@ -9,11 +9,11 @@ import { CongTac, NutHanhDong } from '../NutHanhDong'
 type GiaTri = { id?: string; trangId: string; tuKhoa: string[]; apDung: ApDung; traLoi: string; nhanRieng: string }
 type Trang = { id: string; ten: string }
 
-const oNhap = 'w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-chinh focus:outline-none focus:ring-2 focus:ring-chinh/15'
+export const oNhap = 'w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-chinh focus:outline-none focus:ring-2 focus:ring-chinh/15'
 const coChoTrong = (s: string) => /\[[^\]]*\]/.test(s)
 
 // Nút chọn dạng phân đoạn
-function PhanDoan<T extends string>({ giaTri, doi, lua }: { giaTri: T; doi: (v: T) => void; lua: [T, string][] }) {
+export function PhanDoan<T extends string>({ giaTri, doi, lua }: { giaTri: T; doi: (v: T) => void; lua: [T, string][] }) {
   return (
     <div className="flex gap-1 rounded-lg bg-slate-100 p-1 text-sm">
       {lua.map(([k, nhan]) => (

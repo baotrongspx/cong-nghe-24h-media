@@ -92,6 +92,13 @@ export const ISet = (p: P) => (
   </Svg>
 )
 
+export const IAi = (p: P) => (
+  <Svg {...p}>
+    <path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9Z" />
+    <path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8Z" />
+  </Svg>
+)
+
 // Ảnh đại diện chữ cái đầu, màu cố định theo tên nhóm
 const MAU = ['bg-blue-100 text-blue-700', 'bg-emerald-100 text-emerald-700', 'bg-amber-100 text-amber-800', 'bg-rose-100 text-rose-700', 'bg-violet-100 text-violet-700', 'bg-cyan-100 text-cyan-700']
 export function ChuCaiDau({ ten, className = 'h-9 w-9 text-sm' }: { ten: string; className?: string }) {

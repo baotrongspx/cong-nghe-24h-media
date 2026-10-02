@@ -4,7 +4,7 @@ import { db } from '@/lib/db'
 import { COT_DON, type DonHang, type SanPham } from '@/lib/donHang'
 import { batBuocDangNhap, locDonHang, locHoiThoai } from '@/lib/phien'
 import DonHangChat from './DonHangChat'
-import { ChonPhuTrach, ChonThe, KhungTraLoi, LamMoi, NutAnHien, NutChuaDoc, SoDienThoai } from './HopThuClient'
+import { ChonPhuTrach, ChonThe, KhungTraLoi, LamMoi, NutAi, NutAnHien, NutChuaDoc, SoDienThoai } from './HopThuClient'
 
 type HoiThoai = {
   id: string
@@ -20,7 +20,10 @@ type HoiThoai = {
   cap_nhat_luc: string
   nguoi_phu_trach: string | null
 }
-type Tin = { id: string; chieu: 'vao' | 'ra'; noi_dung: string | null; dinh_kem: { type?: string; payload?: { url?: string } }[] | null; da_an: boolean; tao_luc: string; nguoi_gui_id: string | null }
+type Tin = { id: string; chieu: 'vao' | 'ra'; noi_dung: string | null; dinh_kem: { type?: string; payload?: { url?: string } }[] | null; da_an: boolean; tao_luc: string; nguoi_gui_id: string | null; tu_dong?: boolean }
+
+// AI còn tạm dừng với hội thoại không (gọi ngoài render)
+const conTamDung = (den: string | null) => !!den && new Date(den).getTime() > Date.now()
 
 const LOC = [
   ['', 'Tất cả'],
@@ -90,9 +93,16 @@ export default async function HopThu({ searchParams }: PageProps<'/quan-ly'>) {
   const nhom = [nguoiDung.id, ...chuIds]
   // Tin của hội thoại đang mở: tải song song luôn, chỉ dùng nếu người dùng có quyền xem hội thoại đó (kiểm tra bên dưới)
   const layTin = h
-    ? db().from('tin').select('id, chieu, noi_dung, dinh_kem, da_an, tao_luc, nguoi_gui_id').eq('hoi_thoai_id', h).order('tao_luc', { ascending: false }).limit(200).then((r) => r.data)
+    ? db().from('tin').select('*').eq('hoi_thoai_id', h).order('tao_luc', { ascending: false }).limit(200).then((r) => r.data)
     : null
   // Đơn hàng của hội thoại đang mở + tên/giá sản phẩm đã bán gần đây (gợi ý khi tạo đơn)
+  // Trợ lý AI: Page nào đang bật, hội thoại đang mở có bị tạm dừng AI không (lỗi = chưa cài AI, bỏ qua)
+  const layAi = h
+    ? Promise.all([
+        db().from('tro_ly_ai').select('trang_id').in('trang_id', trangIds).eq('bat', true).then((r) => new Set((r.data ?? []).map((x) => x.trang_id as string))),
+        db().from('hoi_thoai').select('ai_tam_dung_den').eq('id', h).maybeSingle().then((r) => (r.data?.ai_tam_dung_den as string | null) ?? null),
+      ])
+    : null
   const layDon = h
     ? Promise.all([
         db().from('don_hang').select(COT_DON).eq('hoi_thoai_id', h).or(locDonHang(phien)).order('tao_luc', { ascending: false }).then((r) => (r.data ?? []) as DonHang[]),
@@ -132,6 +142,7 @@ export default async function HopThu({ searchParams }: PageProps<'/quan-ly'>) {
     if (dangMo.chua_doc) after(() => db().from('hoi_thoai').update({ chua_doc: 0 }).eq('id', id))
   }
   const [donCuaKhach, donGanDay] = (dangMo && layDon ? await layDon : null) ?? [[], []]
+  const [trangCoAi, aiTamDungDen] = (dangMo && layAi ? await layAi : null) ?? [new Set<string>(), null]
   // Mỗi tên sản phẩm lấy giá của lần bán gần nhất
   const goiYSanPham = [
     ...new Map(donGanDay.flatMap((d) => d.san_pham).reverse().map((x) => [x.ten.toLowerCase(), { ten: x.ten, gia: x.gia }])).values(),
@@ -266,6 +277,9 @@ export default async function HopThu({ searchParams }: PageProps<'/quan-ly'>) {
                 don={donCuaKhach}
                 goiYSanPham={goiYSanPham}
               />
+              {trangCoAi.has(dangMo.trang_id) && (
+                <NutAi hoiThoaiId={dangMo.id} tamDung={conTamDung(aiTamDungDen)} />
+              )}
               <NutChuaDoc hoiThoaiId={dangMo.id} />
             </div>
           </div>
@@ -291,6 +305,7 @@ export default async function HopThu({ searchParams }: PageProps<'/quan-ly'>) {
                       )}
                     </div>
                     <div className={`mt-0.5 flex gap-2 text-[11px] text-phu ${t.chieu === 'ra' ? 'justify-end' : ''}`}>
+                      {t.chieu === 'ra' && t.tu_dong && <span className="text-violet-600">Tự động ·</span>}
                       {t.chieu === 'ra' && t.nguoi_gui_id && <span>{tenNguoi.get(t.nguoi_gui_id) ?? 'Nhân viên'} ·</span>}
                       <span>{gio(t.tao_luc)}</span>
                       {t.da_an && <span className="text-amber-600">Đã ẩn</span>}

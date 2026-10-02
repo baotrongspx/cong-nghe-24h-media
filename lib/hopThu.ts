@@ -1,6 +1,7 @@
 import 'server-only'
 import { db } from '@/lib/db'
 import { anBinhLuan, guiTinNhan, nhanRiengBinhLuan, tenKhach, timSoDienThoai, traLoiBinhLuan } from '@/lib/facebook'
+import { traLoiBangAi } from '@/lib/troLyAi'
 import { GIO_CHO_TRA_LOI_MOI_TIN, chonKichBan, thayTen, type KichBan } from '@/lib/tuDong'
 
 export type Trang = {
@@ -99,12 +100,22 @@ export async function luuTin(t: TinMoi) {
   return { hoiThoaiId: ht.id as string, tinId: tin.id as string, sdt }
 }
 
-// Tìm kịch bản tự trả lời: khớp từ khóa trước, không khớp thì kịch bản "mọi tin" (nếu shop chưa nhắn gì cho khách trong GIO_CHO_TRA_LOI_MOI_TIN giờ)
-async function timTraLoiTuDong(p: { trangId: string; loai: 'tin_nhan' | 'binh_luan'; noiDung: string | null; hoiThoaiId: string; khachTen?: string | null }) {
+// Tìm câu tự trả lời theo thứ tự: kịch bản từ khóa → trợ lý AI (Gemini) → kịch bản "mọi tin"
+// (kịch bản "mọi tin" chỉ gửi nếu shop chưa nhắn gì cho khách trong GIO_CHO_TRA_LOI_MOI_TIN giờ)
+async function timTraLoiTuDong(p: { trang: Trang; loai: 'tin_nhan' | 'binh_luan'; noiDung: string | null; hoiThoaiId: string; khachTen?: string | null }) {
   // select('*'): vẫn chạy khi chưa thêm cột mới (nhan_rieng, tao_luc) vào cơ sở dữ liệu
-  const { data } = await db().from('tu_dong').select('*').eq('trang_id', p.trangId).eq('bat', true).in('ap_dung', [p.loai, 'ca_hai'])
+  const { data } = await db().from('tu_dong').select('*').eq('trang_id', p.trang.id).eq('bat', true).in('ap_dung', [p.loai, 'ca_hai'])
   const ds = ((data ?? []) as KichBan[]).sort((a, b) => (a.tao_luc ?? '').localeCompare(b.tao_luc ?? ''))
   const chon = chonKichBan(ds, p.loai, p.noiDung)
+  if (!chon || chon.moiTin) {
+    // Không khớp từ khóa nào: thử trợ lý AI trước (lỗi thì bỏ qua, dùng kịch bản "mọi tin")
+    try {
+      const ai = await traLoiBangAi({ trangId: p.trang.id, tenTrang: p.trang.ten, loai: p.loai, hoiThoaiId: p.hoiThoaiId, khachTen: p.khachTen })
+      if (ai) return { traLoi: ai, nhanRieng: '' }
+    } catch (e) {
+      console.error('Trợ lý AI lỗi:', e)
+    }
+  }
   if (!chon) return null
   if (chon.moiTin) {
     const tu = new Date(Date.now() - GIO_CHO_TRA_LOI_MOI_TIN * 3600_000).toISOString()
@@ -143,7 +154,7 @@ export async function xuLyTinNhan(trang: Trang, e: SuKienNhan) {
   })
   if (!kq || laEcho) return
 
-  const td = await timTraLoiTuDong({ trangId: trang.id, loai: 'tin_nhan', noiDung, hoiThoaiId: kq.hoiThoaiId })
+  const td = await timTraLoiTuDong({ trang, loai: 'tin_nhan', noiDung, hoiThoaiId: kq.hoiThoaiId })
   if (td?.traLoi) {
     const r = await guiTinNhan(trang.access_token, khachId, td.traLoi)
     await luuTin({ trang, loai: 'tin_nhan', khachId, fbId: r.message_id, chieu: 'ra', noiDung: td.traLoi, tuDong: true })
@@ -212,7 +223,7 @@ export async function xuLyBinhLuan(trang: Trang, v: SuKienBinhLuan) {
     }
   }
 
-  const td = await timTraLoiTuDong({ trangId: trang.id, loai: 'binh_luan', noiDung: v.message ?? null, hoiThoaiId: kq.hoiThoaiId, khachTen: v.from.name })
+  const td = await timTraLoiTuDong({ trang, loai: 'binh_luan', noiDung: v.message ?? null, hoiThoaiId: kq.hoiThoaiId, khachTen: v.from.name })
   if (!td) return
   const chung = { trang, loai: 'binh_luan' as const, khachId: v.from.id, baiVietId: v.post_id ?? '', chieu: 'ra' as const, tuDong: true }
   // Nhắn riêng trước: Facebook chỉ cho nhắn riêng 1 lần cho mỗi bình luận, trong vòng 7 ngày

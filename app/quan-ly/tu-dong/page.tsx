@@ -2,15 +2,20 @@ import { db } from '@/lib/db'
 import { batBuocDangNhap } from '@/lib/phien'
 import type { KichBan } from '@/lib/tuDong'
 import { ISet, ITinNhan } from '../BieuTuong'
+import { coKhoaGemini } from '@/lib/gemini'
 import { KhuSoan, TheKichBan } from './KichBanClient'
+import TroLyAi, { type CaiDatAiView } from './TroLyAi'
 
 export default async function TuDong() {
   const { trangChu: trangIds } = await batBuocDangNhap()
-  const [{ data: dsTrang }, { data: dsKb }] = await Promise.all([
+  const [{ data: dsTrang }, { data: dsKb }, { data: dsAi }] = await Promise.all([
     db().from('fb_trang').select('id, ten').in('id', trangIds).order('ten'),
     // select('*'): vẫn hiện được khi chưa thêm cột mới vào cơ sở dữ liệu
     db().from('tu_dong').select('*').in('trang_id', trangIds),
+    // Lỗi (chưa tạo bảng) thì coi như chưa cài AI
+    db().from('tro_ly_ai').select('*').in('trang_id', trangIds),
   ])
+  const caiDatAi = Object.fromEntries(((dsAi ?? []) as (CaiDatAiView & { trang_id: string })[]).map((c) => [c.trang_id, c]))
   const trang = (dsTrang ?? []) as { id: string; ten: string }[]
   const tenTrang = new Map(trang.map((t) => [t.id, t.ten]))
   const kb = ((dsKb ?? []) as KichBan[]).sort((a, b) => (a.tao_luc ?? '').localeCompare(b.tao_luc ?? ''))
@@ -46,7 +51,7 @@ export default async function TuDong() {
           <div>
             <h1 className="text-2xl font-bold">Tự động trả lời</h1>
             <p className="mt-1 max-w-2xl text-sm text-phu">
-              Trả lời khách ngay lập tức, cả lúc nửa đêm. Kịch bản có từ khóa được ưu tiên; không khớp từ khóa nào thì dùng kịch bản “mọi tin mới”.
+              Trả lời khách ngay lập tức, cả lúc nửa đêm. Thứ tự: kịch bản có từ khóa → trợ lý AI (nếu bật) → kịch bản “mọi tin mới”.
             </p>
           </div>
           {kb.length > 0 && (
@@ -60,6 +65,12 @@ export default async function TuDong() {
             </div>
           )}
         </header>
+
+        {trang.length > 0 && (
+          <div className="mt-6">
+            <TroLyAi trang={trang} caiDat={caiDatAi} coKhoa={coKhoaGemini()} />
+          </div>
+        )}
 
         {trang.length ? (
           <div className="mt-6 grid items-start gap-6 lg:grid-cols-[minmax(0,5fr)_minmax(0,6fr)]">

@@ -8,6 +8,8 @@ import { COT_TRANG, luuTin, type Trang } from '@/lib/hopThu'
 import { goiHieuLuc, timGoi } from '@/lib/goiCuoc'
 import { COT_DON, noiDungXacNhan, type DonHang } from '@/lib/donHang'
 import { AP_DUNG, type ApDung } from '@/lib/tuDong'
+import { coKhoaGemini } from '@/lib/gemini'
+import { THE_CAN_NGUOI, thuAi } from '@/lib/troLyAi'
 import { batBuocDangNhap, batBuocQuanTri, locDonHang, locHoiThoai } from '@/lib/phien'
 
 export type KetQua = { ok: boolean; thongBao?: string }
@@ -231,6 +233,61 @@ export async function xoaTuDong(id: string) {
   await tuDongCuaToi(id)
   await db().from('tu_dong').delete().eq('id', id)
   revalidatePath('/quan-ly/tu-dong')
+}
+
+// ---- Trợ lý AI (Gemini) ----
+type CaiDatAiForm = { trangId: string; bat: boolean; apDung: ApDung; thongTin: string; cachNoi: string; nghiGio: number }
+
+export async function luuTroLyAi(d: CaiDatAiForm): Promise<KetQua> {
+  try {
+    await kiemTraTrang(d.trangId)
+    if (d.bat && !coKhoaGemini()) return { ok: false, thongBao: 'Máy chủ chưa cài GEMINI_API_KEY nên chưa bật được AI' }
+    if (d.bat && d.thongTin.trim().length < 20) return { ok: false, thongBao: 'Hãy nhập thông tin shop (sản phẩm, giá, ship…) để AI trả lời đúng' }
+    const { error } = await db()
+      .from('tro_ly_ai')
+      .upsert({
+        trang_id: d.trangId,
+        bat: d.bat,
+        ap_dung: d.apDung in AP_DUNG ? d.apDung : 'tin_nhan',
+        thong_tin: d.thongTin.trim().slice(0, 20000),
+        cach_noi: d.cachNoi.trim().slice(0, 2000),
+        nghi_gio: Math.min(48, Math.max(0, Math.round(d.nghiGio) || 0)),
+        cap_nhat_luc: new Date().toISOString(),
+      })
+    if (error) return { ok: false, thongBao: /tro_ly_ai/.test(error.message) ? 'Cơ sở dữ liệu chưa cập nhật: hãy chạy lại file supabase/schema.sql trong Supabase.' : error.message }
+    revalidatePath('/quan-ly/tu-dong')
+    return { ok: true }
+  } catch (e) {
+    return { ok: false, thongBao: e instanceof Error ? e.message : 'Có lỗi xảy ra' }
+  }
+}
+
+// Thử hỏi AI với nội dung đang soạn (chưa cần lưu). Không gửi gì cho khách.
+export async function thuTroLyAi(d: { trangId: string; thongTin: string; cachNoi: string; loai: 'tin_nhan' | 'binh_luan'; cauHoi: string }) {
+  try {
+    await kiemTraTrang(d.trangId)
+    if (!coKhoaGemini()) return { ok: false as const, thongBao: 'Máy chủ chưa cài GEMINI_API_KEY' }
+    const { data: t } = await db().from('fb_trang').select('ten').eq('id', d.trangId).single()
+    const kq = await thuAi({ thong_tin: d.thongTin, cach_noi: d.cachNoi, tenTrang: t?.ten ?? 'Shop', loai: d.loai }, [{ vai: 'khach', noiDung: d.cauHoi.slice(0, 1000) }])
+    return { ok: true as const, ...kq }
+  } catch (e) {
+    return { ok: false as const, thongBao: e instanceof Error ? e.message : 'Có lỗi xảy ra' }
+  }
+}
+
+// Bật / tạm dừng AI với riêng một hội thoại. Bật lại thì bỏ thẻ "Cần tư vấn".
+export async function datAiHoiThoai(hoiThoaiId: string, bat: boolean) {
+  await hoiThoaiCuaToi(hoiThoaiId)
+  const { data: ht } = await db().from('hoi_thoai').select('the').eq('id', hoiThoaiId).single()
+  await db()
+    .from('hoi_thoai')
+    .update(
+      bat
+        ? { ai_tam_dung_den: null, the: ((ht?.the as string[]) ?? []).filter((t) => t !== THE_CAN_NGUOI) }
+        : { ai_tam_dung_den: new Date(Date.now() + 100 * 365 * 86400_000).toISOString() },
+    )
+    .eq('id', hoiThoaiId)
+  revalidatePath('/quan-ly')
 }
 
 // ---- Mẫu câu & thẻ (theo người dùng) ----

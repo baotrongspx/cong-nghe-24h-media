@@ -322,3 +322,18 @@ select json_build_object(
 $$;
 -- Chỉ máy chủ (service role) được gọi, khách vãng lai không gọi được qua API công khai
 revoke execute on function bao_cao(timestamptz, timestamptz, text[], text[], text) from public, anon, authenticated;
+
+-- ============ Trợ lý AI (Gemini) trả lời tự động ============
+-- Mỗi Page một cài đặt. Thứ tự khi khách nhắn: kịch bản từ khóa → trợ lý AI → kịch bản "mọi tin mới".
+create table if not exists tro_ly_ai (
+  trang_id text primary key references fb_trang(id) on delete cascade,
+  bat boolean not null default false,
+  ap_dung text not null default 'tin_nhan' check (ap_dung in ('tin_nhan', 'binh_luan', 'ca_hai')),
+  thong_tin text not null default '',        -- sản phẩm, giá, ship, đổi trả… AI chỉ trả lời dựa trên đây
+  cach_noi text not null default '',         -- xưng hô, giọng điệu, lưu ý thêm
+  nghi_gio int not null default 2,           -- AI im lặng nếu nhân viên vừa trả lời khách trong số giờ này
+  cap_nhat_luc timestamptz not null default now()
+);
+alter table tro_ly_ai enable row level security;
+-- AI tạm dừng với hội thoại này tới thời điểm này (khách cần người thật, hoặc nhân viên tự tắt)
+alter table hoi_thoai add column if not exists ai_tam_dung_den timestamptz;
