@@ -9,6 +9,31 @@ export type Nhom = { id: string; ten: string; link: string; ghi_chu: string | nu
 const ngay = (s: string) =>
   new Date(s).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
 
+const boDau = (s: string) =>
+  s
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/đ/g, 'd')
+    .replace(/Đ/g, 'D')
+    .toLowerCase()
+
+// Những cụm 2 chữ xuất hiện trong tên của ít nhất 2 nhóm (ví dụ "công nghệ", "mua bán"), tối đa 8 cụm
+const BO_QUA = new Set(['nhóm', 'hội', 'group', 'cộng đồng', 'của', 'và', 'các', 'những'])
+function tuGoiY(nhom: Nhom[]) {
+  const dem = new Map<string, number>()
+  for (const n of nhom) {
+    const chu = n.ten.toLocaleLowerCase('vi').split(/[^\p{L}\p{N}]+/u).filter((w) => w.length > 1 && !BO_QUA.has(w))
+    const cum = new Set<string>()
+    for (let i = 0; i + 1 < chu.length; i++) cum.add(`${chu[i]} ${chu[i + 1]}`)
+    for (const c of cum) dem.set(c, (dem.get(c) ?? 0) + 1)
+  }
+  return [...dem.entries()]
+    .filter(([, so]) => so >= 2)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 8)
+    .map(([c]) => c)
+}
+
 // Chép bài và mở nhóm trong cùng một cú bấm (trình duyệt chỉ cho mở tab mới khi người dùng bấm)
 function chepVaMo(noiDung: string, link: string) {
   navigator.clipboard.writeText(noiDung).catch(() => {})
@@ -85,8 +110,45 @@ export default function DanhSachNhom({ nhom, bai }: { nhom: Nhom[]; bai: { id: s
 
   const dangDang = hangDoi ? theoId.get(hangDoi[viTri]) : null
 
+  // Tìm nhóm theo tên / ghi chú, không phân biệt dấu ("cong nghe" khớp "Công Nghệ")
+  const [tuKhoa, setTuKhoa] = useState('')
+  const tk = boDau(tuKhoa.trim())
+  const hienThi = tk ? nhom.filter((n) => boDau(`${n.ten} ${n.ghi_chu ?? ''}`).includes(tk)) : nhom
+  const daChonHet = hienThi.length > 0 && hienThi.every((n) => chon.has(n.id))
+  const chonKetQua = (bat: boolean) =>
+    setChon((c) => {
+      const m = new Set(c)
+      for (const n of hienThi) {
+        if (bat) m.add(n.id)
+        else m.delete(n.id)
+      }
+      return m
+    })
+
   return (
     <div>
+      {nhom.length > 0 && !hangDoi && (
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <input
+            type="search"
+            value={tuKhoa}
+            onChange={(e) => setTuKhoa(e.target.value)}
+            placeholder="🔍 Tìm nhóm theo tên, ví dụ: công nghệ"
+            className="min-w-0 flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-chinh focus:outline-none"
+          />
+          {/* Gợi ý nhanh: các từ hay gặp trong tên nhóm */}
+          {tuGoiY(nhom).map((t) => (
+            <button
+              key={t}
+              type="button"
+              onClick={() => setTuKhoa(tuKhoa === t ? '' : t)}
+              className={`rounded-full px-2.5 py-1 text-xs ${tuKhoa === t ? 'bg-chinh text-white' : 'bg-slate-100 text-phu hover:bg-slate-200'}`}
+            >
+              {t}
+            </button>
+          ))}
+        </div>
+      )}
       {bai && nhom.length > 0 && (
         <div className="sticky top-0 z-10 mt-3 rounded-xl border border-chinh/30 bg-blue-50 p-3">
           {dangDang ? (
@@ -111,16 +173,17 @@ export default function DanhSachNhom({ nhom, bai }: { nhom: Nhom[]; bai: { id: s
           ) : (
             <div className="flex flex-wrap items-center gap-3 text-sm">
               <label className="flex items-center gap-1.5">
-                <input
-                  type="checkbox"
-                  checked={chon.size === nhom.length}
-                  onChange={(e) => setChon(e.target.checked ? new Set(nhom.map((n) => n.id)) : new Set())}
-                />
-                Chọn tất cả
+                <input type="checkbox" checked={daChonHet} onChange={(e) => chonKetQua(e.target.checked)} />
+                {tk ? `Chọn tất cả ${hienThi.length} kết quả` : 'Chọn tất cả'}
               </label>
-              <button onClick={() => setChon(new Set(nhom.filter((n) => !n.daDangBaiNay).map((n) => n.id)))} className="text-chinh hover:underline">
-                Chọn nhóm chưa đăng bài này
+              <button onClick={() => setChon(new Set(hienThi.filter((n) => !n.daDangBaiNay).map((n) => n.id)))} className="text-chinh hover:underline">
+                Chỉ chọn nhóm chưa đăng bài này
               </button>
+              {chon.size > 0 && (
+                <button onClick={() => setChon(new Set())} className="text-phu hover:underline">
+                  Bỏ chọn hết
+                </button>
+              )}
               <button
                 onClick={batDau}
                 disabled={!chon.size}
@@ -135,7 +198,8 @@ export default function DanhSachNhom({ nhom, bai }: { nhom: Nhom[]; bai: { id: s
 
       <ul className="mt-3 space-y-2">
         {!nhom.length && <li className="text-sm text-phu">Chưa có nhóm nào. Dán link các nhóm bạn đã tham gia ở cột bên trái.</li>}
-        {nhom.map((n) => (
+        {nhom.length > 0 && !hienThi.length && <li className="text-sm text-phu">Không có nhóm nào có chữ “{tuKhoa}”.</li>}
+        {hienThi.map((n) => (
           <li
             key={n.id}
             className={`flex items-start gap-3 rounded-xl border bg-white p-3 ${dangDang?.id === n.id ? 'border-chinh ring-2 ring-chinh/30' : 'border-slate-200'}`}
