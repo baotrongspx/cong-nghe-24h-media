@@ -113,3 +113,25 @@ alter table nguoi_dung add column if not exists ghi_chu text;
 alter table nguoi_dung add column if not exists dang_nhap_luc timestamptz;
 -- Page nào đang được quản lý (tính vào giới hạn gói)
 alter table trang_quan_tri add column if not exists bat boolean not null default true;
+
+-- ============ Nhân viên & chia hội thoại ============
+-- vai_tro: chu (quản trị Page trên Facebook) | nhan_vien (được mời)
+alter table trang_quan_tri add column if not exists vai_tro text not null default 'chu';
+alter table trang_quan_tri add column if not exists moi_boi text references nguoi_dung(id) on delete cascade;
+alter table trang_quan_tri add column if not exists nhan_chia boolean not null default true;        -- nhận hội thoại khi chia xoay vòng
+alter table trang_quan_tri add column if not exists chi_xem_cua_minh boolean not null default false; -- nhân viên chỉ thấy hội thoại giao cho mình
+alter table trang_quan_tri add column if not exists chia_luc timestamptz;                           -- lần cuối được chia (xoay vòng)
+alter table fb_trang add column if not exists che_do_chia text not null default 'thu_cong';         -- thu_cong | xoay_vong
+alter table hoi_thoai add column if not exists nguoi_phu_trach text references nguoi_dung(id) on delete set null;
+alter table tin add column if not exists nguoi_gui_id text references nguoi_dung(id) on delete set null;
+
+create table if not exists loi_moi (
+  ma text primary key,
+  chu_id text not null references nguoi_dung(id) on delete cascade,
+  trang_ids text[] not null,
+  chi_xem_cua_minh boolean not null default false,
+  tao_luc timestamptz not null default now(),
+  het_han timestamptz not null,
+  da_dung_boi text references nguoi_dung(id) on delete set null
+);
+alter table loi_moi enable row level security;

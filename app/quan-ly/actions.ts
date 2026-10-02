@@ -1,27 +1,29 @@
 'use server'
 
+import { randomBytes } from 'node:crypto'
 import { revalidatePath } from 'next/cache'
 import { db } from '@/lib/db'
 import { LoiFacebook, anBinhLuan, guiTinNhan, nhanRiengBinhLuan, traLoiBinhLuan } from '@/lib/facebook'
-import { luuTin, type Trang } from '@/lib/hopThu'
-import { timGoi } from '@/lib/goiCuoc'
-import { batBuocDangNhap, batBuocQuanTri } from '@/lib/phien'
+import { COT_TRANG, luuTin, type Trang } from '@/lib/hopThu'
+import { goiHieuLuc, timGoi } from '@/lib/goiCuoc'
+import { batBuocDangNhap, batBuocQuanTri, locHoiThoai } from '@/lib/phien'
 
 export type KetQua = { ok: boolean; thongBao?: string }
 
-const COT_TRANG = 'id, ten, access_token, an_binh_luan_sdt, an_tat_ca_binh_luan'
-
-// Lấy hội thoại kèm page, chỉ khi người đang đăng nhập quản lý page đó
+// Lấy hội thoại kèm page, chỉ khi người đang đăng nhập được xem hội thoại đó
 async function hoiThoaiCuaToi(id: string) {
-  const { trangIds } = await batBuocDangNhap()
+  const phien = await batBuocDangNhap()
   const { data } = await db()
     .from('hoi_thoai')
     .select(`id, loai, khach_id, bai_viet_id, trang:trang_id (${COT_TRANG})`)
     .eq('id', id)
-    .in('trang_id', trangIds)
+    .or(locHoiThoai(phien))
     .maybeSingle()
   if (!data) throw new Error('Không tìm thấy hội thoại')
-  return data as unknown as { id: string; loai: 'tin_nhan' | 'binh_luan'; khach_id: string; bai_viet_id: string; trang: Trang }
+  return {
+    ...(data as unknown as { id: string; loai: 'tin_nhan' | 'binh_luan'; khach_id: string; bai_viet_id: string; trang: Trang }),
+    toi: phien.nguoiDung.id,
+  }
 }
 
 function loiDeHieu(e: unknown) {
@@ -41,7 +43,7 @@ export async function traLoi(_truoc: KetQua | null, form: FormData): Promise<Ket
     const token = ht.trang.access_token
     if (ht.loai === 'tin_nhan') {
       const r = await guiTinNhan(token, ht.khach_id, noiDung)
-      await luuTin({ trang: ht.trang, loai: 'tin_nhan', khachId: ht.khach_id, fbId: r.message_id, chieu: 'ra', noiDung })
+      await luuTin({ trang: ht.trang, loai: 'tin_nhan', khachId: ht.khach_id, fbId: r.message_id, chieu: 'ra', noiDung, nguoiGuiId: ht.toi })
     } else {
       // Trả lời vào bình luận mới nhất của khách trong bài này
       const { data: goc } = await db()
@@ -56,10 +58,10 @@ export async function traLoi(_truoc: KetQua | null, form: FormData): Promise<Ket
       if (cach === 'rieng') {
         // Id người bình luận khác PSID Messenger, nên ghi lại ngay trong hội thoại bình luận
         const r = await nhanRiengBinhLuan(token, goc.fb_id, noiDung)
-        await luuTin({ trang: ht.trang, loai: 'binh_luan', khachId: ht.khach_id, baiVietId: ht.bai_viet_id, fbId: r.message_id, chieu: 'ra', noiDung: `[Nhắn riêng] ${noiDung}` })
+        await luuTin({ trang: ht.trang, loai: 'binh_luan', khachId: ht.khach_id, baiVietId: ht.bai_viet_id, fbId: r.message_id, chieu: 'ra', noiDung: `[Nhắn riêng] ${noiDung}`, nguoiGuiId: ht.toi })
       } else {
         const r = await traLoiBinhLuan(token, goc.fb_id, noiDung)
-        await luuTin({ trang: ht.trang, loai: 'binh_luan', khachId: ht.khach_id, baiVietId: ht.bai_viet_id, fbId: r.id, chieu: 'ra', noiDung })
+        await luuTin({ trang: ht.trang, loai: 'binh_luan', khachId: ht.khach_id, baiVietId: ht.bai_viet_id, fbId: r.id, chieu: 'ra', noiDung, nguoiGuiId: ht.toi })
       }
     }
     revalidatePath('/quan-ly')
@@ -102,9 +104,10 @@ export async function danhDauChuaDoc(hoiThoaiId: string) {
 }
 
 // ---- Cài đặt page ----
+// Cài đặt page, kịch bản tự động, nhân viên: chỉ chủ page (không phải nhân viên được mời)
 async function kiemTraTrang(trangId: string) {
-  const { trangIds } = await batBuocDangNhap()
-  if (!trangIds.includes(trangId)) throw new Error('Bạn không quản lý page này')
+  const { trangChu } = await batBuocDangNhap()
+  if (!trangChu.includes(trangId)) throw new Error('Chỉ chủ Page mới thay đổi được cài đặt này')
 }
 
 export async function caiDatTrang(trangId: string, truong: 'an_binh_luan_sdt' | 'an_tat_ca_binh_luan', bat: boolean) {
@@ -115,8 +118,8 @@ export async function caiDatTrang(trangId: string, truong: 'an_binh_luan_sdt' | 
 
 // Bật/tắt quản lý một page. Bật thì kiểm tra giới hạn số page của gói.
 export async function batTatQuanLyTrang(trangId: string, bat: boolean): Promise<KetQua> {
-  const { nguoiDung, goi, trangIds } = await batBuocDangNhap()
-  if (bat && trangIds.length >= goi.soTrang) {
+  const { nguoiDung, goi, trangChu } = await batBuocDangNhap()
+  if (bat && !trangChu.includes(trangId) && trangChu.length >= goi.soTrang) {
     return { ok: false, thongBao: `Gói ${goi.ten} quản lý tối đa ${goi.soTrang} Page. Tắt bớt Page khác hoặc nâng cấp gói.` }
   }
   await db().from('trang_quan_tri').update({ bat }).match({ nguoi_dung_id: nguoiDung.id, trang_id: trangId })
@@ -211,4 +214,99 @@ export async function xoaThe(id: string) {
   const { nguoiDung } = await batBuocDangNhap()
   await db().from('the_hoi_thoai').delete().match({ id, nguoi_dung_id: nguoiDung.id })
   revalidatePath('/quan-ly', 'layout')
+}
+
+// ---- Chia hội thoại ----
+export async function giaoHoiThoai(hoiThoaiId: string, nguoiDungId: string | null) {
+  const ht = await hoiThoaiCuaToi(hoiThoaiId)
+  if (nguoiDungId) {
+    // Chỉ giao cho người đang quản lý page của hội thoại
+    const { data } = await db().from('trang_quan_tri').select('nguoi_dung_id').match({ trang_id: ht.trang.id, nguoi_dung_id: nguoiDungId }).maybeSingle()
+    if (!data) throw new Error('Người này không quản lý Page của hội thoại')
+  }
+  await db().from('hoi_thoai').update({ nguoi_phu_trach: nguoiDungId }).eq('id', hoiThoaiId)
+  revalidatePath('/quan-ly')
+}
+
+export async function doiCheDoChia(trangId: string, xoayVong: boolean) {
+  await kiemTraTrang(trangId)
+  await db().from('fb_trang').update({ che_do_chia: xoayVong ? 'xoay_vong' : 'thu_cong' }).eq('id', trangId)
+  revalidatePath('/quan-ly/nhan-vien')
+}
+
+// ---- Nhân viên ----
+async function soNhanVienCuaChu(chuId: string) {
+  const { data } = await db().from('trang_quan_tri').select('nguoi_dung_id').eq('moi_boi', chuId).eq('vai_tro', 'nhan_vien')
+  return new Set((data ?? []).map((r) => r.nguoi_dung_id)).size
+}
+
+export async function taoLoiMoi(_truoc: KetQua | null, form: FormData): Promise<KetQua & { ma?: string }> {
+  const { nguoiDung, goi, trangChu } = await batBuocDangNhap()
+  const trang = form.getAll('trang_id').map(String).filter((t) => trangChu.includes(t))
+  if (!trang.length) return { ok: false, thongBao: 'Chọn ít nhất một Page cho nhân viên' }
+  if ((await soNhanVienCuaChu(nguoiDung.id)) >= goi.soNhanVien) {
+    return { ok: false, thongBao: `Gói ${goi.ten} có tối đa ${goi.soNhanVien} nhân viên. Xóa bớt hoặc nâng cấp gói.` }
+  }
+  const ma = randomBytes(12).toString('base64url')
+  const { error } = await db()
+    .from('loi_moi')
+    .insert({
+      ma,
+      chu_id: nguoiDung.id,
+      trang_ids: trang,
+      chi_xem_cua_minh: form.get('chi_xem_cua_minh') === 'on',
+      het_han: new Date(Date.now() + 7 * 24 * 3600_000).toISOString(),
+    })
+  if (error) return { ok: false, thongBao: error.message }
+  revalidatePath('/quan-ly/nhan-vien')
+  return { ok: true, ma }
+}
+
+export async function xoaLoiMoi(ma: string) {
+  const { nguoiDung } = await batBuocDangNhap()
+  await db().from('loi_moi').delete().match({ ma, chu_id: nguoiDung.id })
+  revalidatePath('/quan-ly/nhan-vien')
+}
+
+export async function nhanLoiMoi(ma: string): Promise<KetQua> {
+  const { nguoiDung } = await batBuocDangNhap()
+  const { data: lm } = await db().from('loi_moi').select('*').eq('ma', ma).maybeSingle()
+  if (!lm || lm.da_dung_boi || new Date(lm.het_han).getTime() < Date.now()) return { ok: false, thongBao: 'Lời mời không còn hiệu lực' }
+  if (lm.chu_id === nguoiDung.id) return { ok: false, thongBao: 'Đây là lời mời do chính bạn tạo' }
+  const { data: chu } = await db().from('nguoi_dung').select('goi, het_han').eq('id', lm.chu_id).single()
+  if ((await soNhanVienCuaChu(lm.chu_id)) >= goiHieuLuc(chu!).goi.soNhanVien) {
+    return { ok: false, thongBao: 'Chủ shop đã đủ số nhân viên theo gói' }
+  }
+  // Đã là chủ page đó trên Facebook thì giữ nguyên quyền chủ
+  await db()
+    .from('trang_quan_tri')
+    .upsert(
+      (lm.trang_ids as string[]).map((t) => ({
+        nguoi_dung_id: nguoiDung.id,
+        trang_id: t,
+        vai_tro: 'nhan_vien',
+        moi_boi: lm.chu_id,
+        chi_xem_cua_minh: lm.chi_xem_cua_minh,
+        bat: true,
+      })),
+      { onConflict: 'nguoi_dung_id,trang_id', ignoreDuplicates: true },
+    )
+  await db().from('loi_moi').update({ da_dung_boi: nguoiDung.id }).eq('ma', ma)
+  revalidatePath('/quan-ly', 'layout')
+  return { ok: true }
+}
+
+// Chủ chỉnh nhân viên trên một page của mình
+export async function capNhatNhanVien(nhanVienId: string, trangId: string, truong: 'nhan_chia' | 'chi_xem_cua_minh', bat: boolean) {
+  await kiemTraTrang(trangId)
+  await db().from('trang_quan_tri').update({ [truong]: bat }).match({ nguoi_dung_id: nhanVienId, trang_id: trangId })
+  revalidatePath('/quan-ly/nhan-vien')
+}
+
+export async function xoaNhanVien(nhanVienId: string) {
+  const { trangChu } = await batBuocDangNhap()
+  await db().from('trang_quan_tri').delete().eq('nguoi_dung_id', nhanVienId).eq('vai_tro', 'nhan_vien').in('trang_id', trangChu)
+  // Bỏ phụ trách các hội thoại trên page của mình
+  await db().from('hoi_thoai').update({ nguoi_phu_trach: null }).eq('nguoi_phu_trach', nhanVienId).in('trang_id', trangChu)
+  revalidatePath('/quan-ly/nhan-vien')
 }

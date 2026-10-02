@@ -5,7 +5,7 @@ import { soZalo } from '@/lib/thongTin'
 const ngay = (s: string) => new Date(s).toLocaleDateString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })
 
 export default async function GoiCuocCuaToi() {
-  const { nguoiDung, goi, daHet, trangIds } = await batBuocDangNhap()
+  const { nguoiDung, goi, daHet, trangChu: trangIds } = await batBuocDangNhap()
   const zalo = soZalo()
   return (
     <div className="h-full overflow-y-auto">

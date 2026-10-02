@@ -1,7 +1,7 @@
 import { after, type NextRequest } from 'next/server'
 import { db } from '@/lib/db'
 import { chuKyHopLe } from '@/lib/facebook'
-import { xuLyBinhLuan, xuLyTinNhan, type Trang } from '@/lib/hopThu'
+import { COT_TRANG, xuLyBinhLuan, xuLyTinNhan, type Trang } from '@/lib/hopThu'
 
 export const maxDuration = 60
 
@@ -32,7 +32,7 @@ export async function POST(req: NextRequest) {
     for (const entry of du.entry ?? []) {
       const { data: trang } = await db()
         .from('fb_trang')
-        .select('id, ten, access_token, an_binh_luan_sdt, an_tat_ca_binh_luan')
+        .select(COT_TRANG)
         .eq('id', entry.id)
         .maybeSingle<Trang>()
       if (!trang) continue

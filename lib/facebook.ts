@@ -57,6 +57,9 @@ export async function graph<T = unknown>(
 }
 
 // ---- Đăng nhập ----
+// Đường dẫn được phép quay về sau khi đăng nhập (trang nhận lời mời nhân viên), chống chuyển hướng tùy ý
+export const laDuongMoi = (s: string | null | undefined): s is string => !!s && /^\/moi\/[\w-]+$/.test(s)
+
 export function urlDangNhap(chuyenVe: string, state: string) {
   const { id } = cauHinhApp()
   const u = new URL(`https://www.facebook.com/${PHIEN_BAN}/dialog/oauth`)

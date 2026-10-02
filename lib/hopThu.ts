@@ -8,7 +8,10 @@ export type Trang = {
   access_token: string
   an_binh_luan_sdt: boolean
   an_tat_ca_binh_luan: boolean
+  che_do_chia?: string
 }
+
+export const COT_TRANG = 'id, ten, access_token, an_binh_luan_sdt, an_tat_ca_binh_luan, che_do_chia'
 
 type TinMoi = {
   trang: Trang
@@ -21,6 +24,23 @@ type TinMoi = {
   noiDung: string | null
   dinhKem?: unknown
   thoiGian?: Date
+  nguoiGuiId?: string // người trả lời trên phần mềm (nhân viên)
+}
+
+// Chia xoay vòng: chọn người nhận chia lâu nhất chưa được giao
+async function chonNguoiXoayVong(trangId: string) {
+  const { data } = await db()
+    .from('trang_quan_tri')
+    .select('nguoi_dung_id')
+    .eq('trang_id', trangId)
+    .eq('bat', true)
+    .eq('nhan_chia', true)
+    .order('chia_luc', { ascending: true, nullsFirst: true })
+    .limit(1)
+    .maybeSingle()
+  if (!data) return null
+  await db().from('trang_quan_tri').update({ chia_luc: new Date().toISOString() }).match({ trang_id: trangId, nguoi_dung_id: data.nguoi_dung_id })
+  return data.nguoi_dung_id as string
 }
 
 // Lưu một tin (nhắn hoặc bình luận) vào hội thoại tương ứng. Trả về null nếu tin đã có (Facebook gửi lại webhook).
@@ -30,15 +50,16 @@ export async function luuTin(t: TinMoi) {
 
   let { data: ht } = await db()
     .from('hoi_thoai')
-    .select('id, khach_ten, so_dien_thoai, chua_doc')
+    .select('id, khach_ten, so_dien_thoai, chua_doc, nguoi_phu_trach')
     .match(khoa)
     .maybeSingle()
   if (!ht) {
     const ten = t.khachTen ?? (t.loai === 'tin_nhan' ? await tenKhach(t.trang.access_token, t.khachId) : null)
+    const phuTrach = t.chieu === 'vao' && t.trang.che_do_chia === 'xoay_vong' ? await chonNguoiXoayVong(t.trang.id) : null
     const r = await db()
       .from('hoi_thoai')
-      .upsert({ ...khoa, khach_ten: ten }, { onConflict: 'trang_id,loai,khach_id,bai_viet_id' })
-      .select('id, khach_ten, so_dien_thoai, chua_doc')
+      .upsert({ ...khoa, khach_ten: ten, nguoi_phu_trach: phuTrach }, { onConflict: 'trang_id,loai,khach_id,bai_viet_id' })
+      .select('id, khach_ten, so_dien_thoai, chua_doc, nguoi_phu_trach')
       .single()
     if (r.error) throw new Error(r.error.message)
     ht = r.data
@@ -47,7 +68,7 @@ export async function luuTin(t: TinMoi) {
   const { data: tin, error } = await db()
     .from('tin')
     .upsert(
-      { hoi_thoai_id: ht.id, fb_id: t.fbId, chieu: t.chieu, noi_dung: t.noiDung, dinh_kem: t.dinhKem ?? null, tao_luc: luc },
+      { hoi_thoai_id: ht.id, fb_id: t.fbId, chieu: t.chieu, noi_dung: t.noiDung, dinh_kem: t.dinhKem ?? null, tao_luc: luc, nguoi_gui_id: t.nguoiGuiId ?? null },
       { onConflict: 'fb_id', ignoreDuplicates: true },
     )
     .select('id')
@@ -64,6 +85,8 @@ export async function luuTin(t: TinMoi) {
       chua_doc: t.chieu === 'vao' ? ht.chua_doc + 1 : 0,
       ...(t.khachTen && !ht.khach_ten ? { khach_ten: t.khachTen } : {}),
       ...(sdt ? { so_dien_thoai: sdt } : {}),
+      // Hội thoại chưa ai phụ trách: giao cho người trả lời đầu tiên
+      ...(t.nguoiGuiId && !ht.nguoi_phu_trach ? { nguoi_phu_trach: t.nguoiGuiId } : {}),
     })
     .eq('id', ht.id)
 

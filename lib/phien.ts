@@ -69,12 +69,29 @@ export async function batBuocDangNhap() {
   const { goi, daHet } = goiHieuLuc(nd)
   const { data } = await db()
     .from('trang_quan_tri')
-    .select('trang_id')
+    .select('trang_id, vai_tro, moi_boi, chi_xem_cua_minh')
     .eq('nguoi_dung_id', id)
     .eq('bat', true)
     .order('trang_id')
-  const trangIds = (data ?? []).map((r) => r.trang_id as string).slice(0, goi.soTrang)
-  return { nguoiDung: nd, goi, daHet, trangIds }
+  const dong = data ?? []
+  // Page mình là chủ: tính vào giới hạn gói của mình. Page được mời làm nhân viên: theo gói của người mời.
+  const trangChu = dong.filter((r) => r.vai_tro !== 'nhan_vien').map((r) => r.trang_id as string).slice(0, goi.soTrang)
+  const trangNhanVien = dong.filter((r) => r.vai_tro === 'nhan_vien')
+  const trangIds = [...trangChu, ...trangNhanVien.map((r) => r.trang_id as string)]
+  // Page mà mình chỉ được xem hội thoại giao cho mình
+  const chiCuaMinh = trangNhanVien.filter((r) => r.chi_xem_cua_minh).map((r) => r.trang_id as string)
+  // Chủ của mình (để dùng chung thẻ, mẫu câu)
+  const chuIds = [...new Set(trangNhanVien.map((r) => r.moi_boi as string).filter(Boolean))]
+  return { nguoiDung: nd, goi, daHet, trangIds, trangChu, chiCuaMinh, chuIds }
+}
+
+// Bộ lọc hội thoại mình được xem (dùng với .or() của Supabase)
+export function locHoiThoai(p: { trangIds: string[]; chiCuaMinh: string[]; nguoiDung: { id: string } }) {
+  const tuDo = p.trangIds.filter((t) => !p.chiCuaMinh.includes(t))
+  const phan: string[] = []
+  if (tuDo.length) phan.push(`trang_id.in.(${tuDo.join(',')})`)
+  if (p.chiCuaMinh.length) phan.push(`and(trang_id.in.(${p.chiCuaMinh.join(',')}),nguoi_phu_trach.eq.${p.nguoiDung.id})`)
+  return phan.length ? phan.join(',') : 'trang_id.eq.__khong_co__'
 }
 
 export async function batBuocQuanTri() {

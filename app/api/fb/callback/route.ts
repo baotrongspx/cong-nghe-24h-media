@@ -1,7 +1,7 @@
 import { cookies } from 'next/headers'
 import { NextResponse, type NextRequest } from 'next/server'
 import { db } from '@/lib/db'
-import { dangKyWebhook, doiCodeLayToken, graph, layDanhSachTrang } from '@/lib/facebook'
+import { dangKyWebhook, doiCodeLayToken, graph, laDuongMoi, layDanhSachTrang } from '@/lib/facebook'
 import { goiHieuLuc } from '@/lib/goiCuoc'
 import { taoPhien } from '@/lib/phien'
 
@@ -12,7 +12,9 @@ export async function GET(req: NextRequest) {
   const q = req.nextUrl.searchParams
   const kho = await cookies()
   const state = kho.get('fb_state')?.value
+  const ve = kho.get('fb_ve')?.value
   kho.delete('fb_state')
+  kho.delete('fb_ve')
 
   if (q.get('error')) return veDangNhap(req, 'Bạn đã hủy đăng nhập Facebook.')
   const code = q.get('code')
@@ -41,9 +43,9 @@ export async function GET(req: NextRequest) {
         .upsert(trang.map((t) => ({ id: t.id, ten: t.name, anh: t.picture?.data?.url ?? null, access_token: t.access_token })))
       if (error) throw new Error(error.message)
       // Page mới kết nối: bật quản lý nếu còn chỗ trong gói, quá giới hạn thì để tắt (bật lại ở mục Fanpage)
-      const { data: daCo } = await db().from('trang_quan_tri').select('trang_id, bat').eq('nguoi_dung_id', me.id)
+      const { data: daCo } = await db().from('trang_quan_tri').select('trang_id, bat, vai_tro').eq('nguoi_dung_id', me.id)
       const coRoi = new Set((daCo ?? []).map((r) => r.trang_id))
-      let dangBat = (daCo ?? []).filter((r) => r.bat).length
+      let dangBat = (daCo ?? []).filter((r) => r.bat && r.vai_tro !== 'nhan_vien').length
       const moi = trang
         .filter((t) => !coRoi.has(t.id))
         .map((t) => ({ nguoi_dung_id: me.id, trang_id: t.id, bat: dangBat++ < goi.soTrang }))
@@ -53,7 +55,7 @@ export async function GET(req: NextRequest) {
     }
 
     await taoPhien(me.id)
-    return NextResponse.redirect(new URL('/quan-ly', req.url))
+    return NextResponse.redirect(new URL(laDuongMoi(ve) ? ve : '/quan-ly', req.url))
   } catch (e) {
     console.error('Đăng nhập Facebook lỗi:', e)
     return veDangNhap(req, 'Không đăng nhập được Facebook. Vui lòng thử lại.')

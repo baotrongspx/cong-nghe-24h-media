@@ -41,7 +41,7 @@ export default async function QuanTri({ searchParams }: PageProps<'/quan-ly/quan
     dem('nguoi_dung').gte('tao_luc', truoc(24 * 7)),
     dem('tin').gte('tao_luc', truoc(24)),
     truyVan,
-    db().from('trang_quan_tri').select('nguoi_dung_id, bat'),
+    db().from('trang_quan_tri').select('nguoi_dung_id, bat').neq('vai_tro', 'nhan_vien'),
   ])
   const khach = (dsKhach ?? []) as Khach[]
   const soTrang = new Map<string, { bat: number; tong: number }>()

@@ -10,6 +10,7 @@ export type GoiCuoc = {
   ten: string
   gia: number | null // đồng / tháng; null = chưa bán (hiện "Sắp ra mắt")
   soTrang: number // số Page được quản lý cùng lúc
+  soNhanVien: number // số nhân viên được mời (không tính chủ)
   danhCho: string
   tinhNang: string[]
   noiBat?: boolean
@@ -21,24 +22,27 @@ export const GOI_CUOC: GoiCuoc[] = [
     ten: 'Miễn phí',
     gia: 0,
     soTrang: 3,
+    soNhanVien: 2,
     danhCho: 'Shop nhỏ mới bắt đầu bán trên Facebook',
-    tinhNang: ['Tối đa 3 Fanpage', 'Hộp thư chung tin nhắn + bình luận', 'Tự ẩn bình luận có SĐT', 'Mẫu câu, gắn thẻ khách', 'Tự trả lời theo từ khóa'],
+    tinhNang: ['Tối đa 3 Fanpage, 2 nhân viên', 'Hộp thư chung tin nhắn + bình luận', 'Tự ẩn bình luận có SĐT', 'Mẫu câu, gắn thẻ khách', 'Tự trả lời theo từ khóa', 'Chia hội thoại cho nhân viên'],
   },
   {
     ma: 'co_ban',
     ten: 'Cơ bản',
     gia: null,
     soTrang: 5,
+    soNhanVien: 5,
     danhCho: 'Shop đang bán đều, có vài Page',
-    tinhNang: ['Tối đa 5 Fanpage', 'Toàn bộ tính năng gói Miễn phí', 'Hỗ trợ qua Zalo trong giờ hành chính'],
+    tinhNang: ['Tối đa 5 Fanpage, 5 nhân viên', 'Toàn bộ tính năng gói Miễn phí', 'Hỗ trợ qua Zalo trong giờ hành chính'],
   },
   {
     ma: 'chuyen_nghiep',
     ten: 'Chuyên nghiệp',
     gia: null,
     soTrang: 15,
+    soNhanVien: 15,
     danhCho: 'Shop chạy quảng cáo nhiều, lượng tin lớn',
-    tinhNang: ['Tối đa 15 Fanpage', 'Toàn bộ tính năng gói Cơ bản', 'Hỗ trợ ưu tiên, cài đặt giúp'],
+    tinhNang: ['Tối đa 15 Fanpage, 15 nhân viên', 'Toàn bộ tính năng gói Cơ bản', 'Hỗ trợ ưu tiên, cài đặt giúp'],
     noiBat: true,
   },
   {
@@ -46,8 +50,9 @@ export const GOI_CUOC: GoiCuoc[] = [
     ten: 'Doanh nghiệp',
     gia: null,
     soTrang: 100,
+    soNhanVien: 50,
     danhCho: 'Hệ thống nhiều chi nhánh, nhiều Page',
-    tinhNang: ['Tối đa 100 Fanpage', 'Toàn bộ tính năng gói Chuyên nghiệp', 'Hỗ trợ riêng 1-1'],
+    tinhNang: ['Tối đa 100 Fanpage, 50 nhân viên', 'Toàn bộ tính năng gói Chuyên nghiệp', 'Hỗ trợ riêng 1-1'],
   },
 ]
 

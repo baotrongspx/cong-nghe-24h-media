@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto'
 import { cookies } from 'next/headers'
 import { NextResponse, type NextRequest } from 'next/server'
-import { urlDangNhap } from '@/lib/facebook'
+import { laDuongMoi, urlDangNhap } from '@/lib/facebook'
 
 // Chuyển sang hộp thoại đăng nhập Facebook. state chống giả mạo yêu cầu (CSRF).
 export async function GET(req: NextRequest) {
@@ -10,12 +10,12 @@ export async function GET(req: NextRequest) {
     return NextResponse.redirect(new URL(`/dang-nhap?loi=${encodeURIComponent(loi)}`, req.url))
   }
   const state = randomBytes(16).toString('hex')
-  ;(await cookies()).set('fb_state', state, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
-    maxAge: 600,
-    path: '/',
-  })
+  const tuyChon = { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax' as const, maxAge: 600, path: '/' }
+  const kho = await cookies()
+  kho.set('fb_state', state, tuyChon)
+  // Sau khi đăng nhập quay lại trang lời mời nhân viên (chỉ chấp nhận đường dẫn /moi/...)
+  const ve = req.nextUrl.searchParams.get('ve')
+  if (laDuongMoi(ve)) kho.set('fb_ve', ve, tuyChon)
+  else kho.delete('fb_ve')
   return NextResponse.redirect(urlDangNhap(new URL('/api/fb/callback', req.url).toString(), state))
 }

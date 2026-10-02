@@ -7,7 +7,7 @@ const AP_DUNG = { ca_hai: 'Tin nhắn + bình luận', tin_nhan: 'Chỉ tin nh�
 const O = 'rounded-lg border border-slate-300 px-3 py-2 text-sm'
 
 export default async function TuDong() {
-  const { trangIds } = await batBuocDangNhap()
+  const { trangChu: trangIds } = await batBuocDangNhap()
   const [{ data: trang }, { data: kb }] = await Promise.all([
     db().from('fb_trang').select('id, ten').in('id', trangIds).order('ten'),
     db().from('tu_dong').select('id, trang_id, tu_khoa, tra_loi, ap_dung, bat').in('trang_id', trangIds),

@@ -2,7 +2,7 @@
 
 import { useActionState, useEffect, useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
-import { anHienBinhLuan, danhDauChuaDoc, datThe, luuSoDienThoai, traLoi } from './actions'
+import { anHienBinhLuan, danhDauChuaDoc, datThe, giaoHoiThoai, luuSoDienThoai, traLoi } from './actions'
 
 // Tải lại dữ liệu mỗi 5 giây khi tab đang mở để thấy tin mới (webhook đã lưu sẵn vào cơ sở dữ liệu)
 export function LamMoi() {
@@ -129,6 +129,37 @@ export function ChonThe({ hoiThoaiId, dangChon, tatCa }: { hoiThoaiId: string; d
         </div>
       )}
     </div>
+  )
+}
+
+// Giao hội thoại cho một người quản lý page (hoặc bỏ giao)
+export function ChonPhuTrach({
+  hoiThoaiId,
+  dangChon,
+  nguoi,
+  toi,
+}: {
+  hoiThoaiId: string
+  dangChon: string | null
+  nguoi: { id: string; ten: string }[]
+  toi: string
+}) {
+  const [dang, chay] = useTransition()
+  return (
+    <select
+      value={dangChon ?? ''}
+      disabled={dang}
+      onChange={(e) => chay(() => giaoHoiThoai(hoiThoaiId, e.target.value || null))}
+      title="Người phụ trách"
+      className="max-w-40 rounded-md border border-slate-300 px-2 py-1 text-sm disabled:opacity-50"
+    >
+      <option value="">👤 Chưa giao</option>
+      {nguoi.map((n) => (
+        <option key={n.id} value={n.id}>
+          👤 {n.id === toi ? `${n.ten} (tôi)` : n.ten}
+        </option>
+      ))}
+    </select>
   )
 }
 

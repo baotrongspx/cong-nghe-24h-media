@@ -10,11 +10,12 @@ type Dong = {
 }
 
 export default async function Fanpage() {
-  const { nguoiDung, goi, trangIds } = await batBuocDangNhap()
+  const { nguoiDung, goi, trangChu: trangIds } = await batBuocDangNhap()
   const { data } = await db()
     .from('trang_quan_tri')
     .select('bat, trang:trang_id (id, ten, anh, an_binh_luan_sdt, an_tat_ca_binh_luan)')
     .eq('nguoi_dung_id', nguoiDung.id)
+    .neq('vai_tro', 'nhan_vien')
   const ds = ((data ?? []) as unknown as Dong[]).sort((a, b) => a.trang.ten.localeCompare(b.trang.ten, 'vi'))
   const dangQuanLy = new Set(trangIds)
 

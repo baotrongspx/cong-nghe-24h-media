@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { db } from '@/lib/db'
-import { batBuocDangNhap } from '@/lib/phien'
-import { ChonThe, KhungTraLoi, LamMoi, NutAnHien, NutChuaDoc, SoDienThoai } from './HopThuClient'
+import { batBuocDangNhap, locHoiThoai } from '@/lib/phien'
+import { ChonPhuTrach, ChonThe, KhungTraLoi, LamMoi, NutAnHien, NutChuaDoc, SoDienThoai } from './HopThuClient'
 
 type HoiThoai = {
   id: string
@@ -15,11 +15,14 @@ type HoiThoai = {
   tin_cuoi: string | null
   chua_doc: number
   cap_nhat_luc: string
+  nguoi_phu_trach: string | null
 }
-type Tin = { id: string; chieu: 'vao' | 'ra'; noi_dung: string | null; dinh_kem: { type?: string; payload?: { url?: string } }[] | null; da_an: boolean; tao_luc: string }
+type Tin = { id: string; chieu: 'vao' | 'ra'; noi_dung: string | null; dinh_kem: { type?: string; payload?: { url?: string } }[] | null; da_an: boolean; tao_luc: string; nguoi_gui_id: string | null }
 
 const LOC = [
   ['', 'Tất cả'],
+  ['cua_toi', 'Của tôi'],
+  ['chua_giao', 'Chưa giao'],
   ['tin_nhan', 'Tin nhắn'],
   ['binh_luan', 'Bình luận'],
   ['chua_doc', 'Chưa đọc'],
@@ -37,7 +40,8 @@ const gio = (s: string) => {
 }
 
 export default async function HopThu({ searchParams }: PageProps<'/quan-ly'>) {
-  const { nguoiDung, trangIds } = await batBuocDangNhap()
+  const phien = await batBuocDangNhap()
+  const { nguoiDung, trangIds, chiCuaMinh, chuIds } = phien
   const sp = await searchParams
   const lay = (k: string) => (typeof sp[k] === 'string' ? (sp[k] as string) : '')
   const [h, loc, trangLoc, theLoc, q] = ['h', 'loc', 'trang', 'the', 'q'].map(lay)
@@ -62,10 +66,13 @@ export default async function HopThu({ searchParams }: PageProps<'/quan-ly'>) {
 
   let truyVan = db()
     .from('hoi_thoai')
-    .select('id, trang_id, loai, khach_id, khach_ten, bai_viet_id, so_dien_thoai, the, tin_cuoi, chua_doc, cap_nhat_luc')
-    .in('trang_id', trangLoc && trangIds.includes(trangLoc) ? [trangLoc] : trangIds)
+    .select('id, trang_id, loai, khach_id, khach_ten, bai_viet_id, so_dien_thoai, the, tin_cuoi, chua_doc, cap_nhat_luc, nguoi_phu_trach')
     .order('cap_nhat_luc', { ascending: false })
     .limit(100)
+  // Quyền xem: page được chọn (hoặc mọi page), nhân viên bị giới hạn chỉ thấy hội thoại giao cho mình
+  const quyen = locHoiThoai({ ...phien, trangIds: trangLoc && trangIds.includes(trangLoc) ? [trangLoc] : trangIds })
+  if (loc === 'cua_toi') truyVan = truyVan.eq('nguoi_phu_trach', nguoiDung.id)
+  if (loc === 'chua_giao') truyVan = truyVan.is('nguoi_phu_trach', null)
   if (loc === 'tin_nhan' || loc === 'binh_luan') truyVan = truyVan.eq('loai', loc)
   if (loc === 'chua_doc') truyVan = truyVan.gt('chua_doc', 0)
   if (loc === 'co_sdt') truyVan = truyVan.not('so_dien_thoai', 'is', null)
@@ -73,31 +80,40 @@ export default async function HopThu({ searchParams }: PageProps<'/quan-ly'>) {
   if (theLoc) truyVan = truyVan.contains('the', [theLoc])
   if (q) {
     const an = q.replace(/[%,()]/g, ' ')
-    truyVan = truyVan.or(`khach_ten.ilike.%${an}%,so_dien_thoai.ilike.%${an}%,tin_cuoi.ilike.%${an}%`)
-  }
+    truyVan = truyVan.or(`and(or(${quyen}),or(khach_ten.ilike.%${an}%,so_dien_thoai.ilike.%${an}%,tin_cuoi.ilike.%${an}%))`)
+  } else truyVan = truyVan.or(quyen)
 
-  const [{ data: dsHt }, { data: dsTrang }, { data: dsThe }, { data: dsMau }] = await Promise.all([
+  // Thẻ, mẫu câu: của mình + của chủ shop (nếu mình là nhân viên)
+  const nhom = [nguoiDung.id, ...chuIds]
+  const [{ data: dsHt }, { data: dsTrang }, { data: dsThe }, { data: dsMau }, { data: dsThanhVien }] = await Promise.all([
     truyVan,
     db().from('fb_trang').select('id, ten, anh').in('id', trangIds),
-    db().from('the_hoi_thoai').select('id, ten, mau').eq('nguoi_dung_id', nguoiDung.id).order('ten'),
-    db().from('mau_cau').select('phim_tat, noi_dung').eq('nguoi_dung_id', nguoiDung.id).order('phim_tat'),
+    db().from('the_hoi_thoai').select('id, ten, mau').in('nguoi_dung_id', nhom).order('ten'),
+    db().from('mau_cau').select('phim_tat, noi_dung').in('nguoi_dung_id', nhom).order('phim_tat'),
+    db().from('trang_quan_tri').select('trang_id, nguoi_dung_id, nguoi:nguoi_dung_id (ten)').in('trang_id', trangIds).eq('bat', true),
   ])
+  // Người quản lý từng page (để giao hội thoại) và tên theo id
+  const thanhVien = (dsThanhVien ?? []) as unknown as { trang_id: string; nguoi_dung_id: string; nguoi: { ten: string } | null }[]
+  const tenNguoi = new Map(thanhVien.map((r) => [r.nguoi_dung_id, r.nguoi?.ten ?? 'Không rõ']))
+  const nguoiCuaTrang = (trangId: string) =>
+    thanhVien.filter((r) => r.trang_id === trangId).map((r) => ({ id: r.nguoi_dung_id, ten: tenNguoi.get(r.nguoi_dung_id)! }))
   const hoiThoai = (dsHt ?? []) as HoiThoai[]
   const trang = new Map((dsTrang ?? []).map((t) => [t.id as string, t as { id: string; ten: string; anh: string | null }]))
-  const the = (dsThe ?? []) as { id: string; ten: string; mau: string }[]
+  // Thẻ trùng tên giữa mình và chủ shop: giữ một
+  const the = [...new Map(((dsThe ?? []) as { id: string; ten: string; mau: string }[]).map((t) => [t.ten, t])).values()]
   const mauThe = new Map(the.map((t) => [t.ten, t.mau]))
 
   // Hội thoại đang mở: có thể không nằm trong danh sách đã lọc
   let dangMo = hoiThoai.find((x) => x.id === h) ?? null
   if (h && !dangMo) {
-    const { data } = await db().from('hoi_thoai').select('*').eq('id', h).in('trang_id', trangIds).maybeSingle()
+    const { data } = await db().from('hoi_thoai').select('*').eq('id', h).or(locHoiThoai(phien)).maybeSingle()
     dangMo = data as HoiThoai | null
   }
   let tin: Tin[] = []
   if (dangMo) {
     const { data } = await db()
       .from('tin')
-      .select('id, chieu, noi_dung, dinh_kem, da_an, tao_luc')
+      .select('id, chieu, noi_dung, dinh_kem, da_an, tao_luc, nguoi_gui_id')
       .eq('hoi_thoai_id', dangMo.id)
       .order('tao_luc', { ascending: false })
       .limit(200)
@@ -183,6 +199,9 @@ export default async function HopThu({ searchParams }: PageProps<'/quan-ly'>) {
                   <div className="mt-1 flex flex-wrap items-center gap-1 text-[11px]">
                     {trang.size > 1 && <span className="text-phu">{trang.get(x.trang_id)?.ten}</span>}
                     {x.so_dien_thoai && <span className="rounded bg-green-100 px-1.5 text-green-700">📞 {x.so_dien_thoai}</span>}
+                    {x.nguoi_phu_trach && (
+                      <span className="rounded bg-slate-100 px-1.5 text-phu">👤 {x.nguoi_phu_trach === nguoiDung.id ? 'Tôi' : tenNguoi.get(x.nguoi_phu_trach)}</span>
+                    )}
                     {x.the.map((t) => (
                       <span key={t} className="rounded px-1.5 text-white" style={{ background: mauThe.get(t) ?? '#64748b' }}>
                         {t}
@@ -218,6 +237,7 @@ export default async function HopThu({ searchParams }: PageProps<'/quan-ly'>) {
             </div>
             <div className="ml-auto flex flex-wrap items-center gap-2">
               <SoDienThoai hoiThoaiId={dangMo.id} giaTri={dangMo.so_dien_thoai ?? ''} />
+              <ChonPhuTrach hoiThoaiId={dangMo.id} dangChon={dangMo.nguoi_phu_trach} nguoi={nguoiCuaTrang(dangMo.trang_id)} toi={nguoiDung.id} />
               <ChonThe hoiThoaiId={dangMo.id} dangChon={dangMo.the} tatCa={the} />
               <NutChuaDoc hoiThoaiId={dangMo.id} />
             </div>
@@ -244,6 +264,7 @@ export default async function HopThu({ searchParams }: PageProps<'/quan-ly'>) {
                       )}
                     </div>
                     <div className={`mt-0.5 flex gap-2 text-[11px] text-phu ${t.chieu === 'ra' ? 'justify-end' : ''}`}>
+                      {t.chieu === 'ra' && t.nguoi_gui_id && <span>{tenNguoi.get(t.nguoi_gui_id) ?? 'Nhân viên'} ·</span>}
                       <span>{gio(t.tao_luc)}</span>
                       {t.da_an && <span className="text-amber-600">Đã ẩn</span>}
                       {dangMo.loai === 'binh_luan' && t.chieu === 'vao' && <NutAnHien tinId={t.id} daAn={t.da_an} />}
