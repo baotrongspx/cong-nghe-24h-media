@@ -197,7 +197,12 @@ export default function DanhSachNhom({ nhom, bai }: { nhom: Nhom[]; bai: { id: s
       )}
 
       <ul className="mt-3 space-y-2">
-        {!nhom.length && <li className="text-sm text-phu">Chưa có nhóm nào. Dán link các nhóm bạn đã tham gia ở cột bên trái.</li>}
+        {!nhom.length && (
+          <li className="rounded-xl border border-dashed border-slate-300 bg-white p-4 text-sm text-phu">
+            <b className="text-chu">Chưa có nhóm nào.</b> Facebook không cho phần mềm tự đọc danh sách nhóm bạn đã tham gia, nên cần dán link nhóm một lần ở ô
+            “Thêm nhóm đã tham gia”. Sau đó các nhóm hiện ở đây kèm ô tích chọn và ô tìm theo tên (ví dụ “công nghệ”).
+          </li>
+        )}
         {nhom.length > 0 && !hienThi.length && <li className="text-sm text-phu">Không có nhóm nào có chữ “{tuKhoa}”.</li>}
         {hienThi.map((n) => (
           <li

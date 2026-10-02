@@ -26,7 +26,7 @@ export default async function DangNhom({ searchParams }: PageProps<'/quan-ly/dan
   return (
     <div className="h-full overflow-y-auto">
       <div className="mx-auto grid max-w-6xl gap-8 px-4 py-8 lg:grid-cols-[2fr_3fr]">
-        <section className="space-y-5">
+        <section className="min-w-0 space-y-5">
           <div>
             <h1 className="text-2xl font-bold">Trợ lý đăng nhóm</h1>
             <p className="mt-1 text-sm text-phu">
@@ -74,7 +74,7 @@ export default async function DangNhom({ searchParams }: PageProps<'/quan-ly/dan
           <FormThemNhieuNhom />
         </section>
 
-        <section>
+        <section className="min-w-0">
           <div className="flex flex-wrap items-baseline justify-between gap-2">
             <h2 className="text-xl font-bold">Nhóm của bạn ({nhom.length})</h2>
             <p className={`text-sm ${(homNay ?? 0) >= NGUONG_MOI_NGAY ? 'font-semibold text-red-600' : 'text-phu'}`}>Hôm nay đã đăng {homNay ?? 0} nhóm</p>

@@ -41,14 +41,14 @@ export default async function DangBai() {
   return (
     <div className="h-full overflow-y-auto">
       <div className="mx-auto grid max-w-6xl gap-8 px-4 py-8 lg:grid-cols-[2fr_3fr]">
-        <section>
+        <section className="min-w-0">
           <h1 className="text-2xl font-bold">Đăng bài</h1>
           <p className="mt-1 text-sm text-phu">Soạn một lần, đăng ngay hoặc hẹn giờ lên nhiều Fanpage. Bài hẹn giờ nằm trong mục Bài viết đã lên lịch của Page.</p>
           <div className="mt-4">
             <SoanBai trang={trang} />
           </div>
         </section>
-        <section>
+        <section className="min-w-0">
           <h2 className="text-xl font-bold">Thư viện bài viết</h2>
           <ul className="mt-4 space-y-3">
             {!bai.length && <li className="text-sm text-phu">Chưa có bài viết nào.</li>}

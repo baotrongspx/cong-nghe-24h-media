@@ -109,7 +109,15 @@ export async function themNhieuNhom(_truoc: KetQua | null, form: FormData): Prom
     const ten = dong.slice(0, dong.indexOf('http')).replace(/[|\t,;:-]+\s*$/, '').trim() || (/^\d+$/.test(m[1]) ? `Nhóm ${m[1]}` : m[1].replace(/[.-]/g, ' '))
     moi.push({ nguoi_dung_id: nguoiDung.id, ten: ten.slice(0, 120), link })
   }
-  if (!moi.length) return { ok: false, thongBao: 'Không tìm thấy link nhóm mới nào (link dạng https://www.facebook.com/groups/...)' }
+  if (!moi.length) {
+    const coLink = /facebook\.com\/groups\//.test(String(form.get('danh_sach') ?? ''))
+    return {
+      ok: false,
+      thongBao: coLink
+        ? 'Các nhóm này đã có trong danh sách rồi.'
+        : 'Ô này dùng để dán LINK nhóm (dạng https://www.facebook.com/groups/...), không phải để tìm. Thêm nhóm xong, ô tìm theo tên sẽ hiện ở danh sách bên phải.',
+    }
+  }
   const { error } = await db().from('nhom_fb').insert(moi)
   if (error) return { ok: false, thongBao: error.message }
   revalidatePath('/quan-ly/dang-nhom')
