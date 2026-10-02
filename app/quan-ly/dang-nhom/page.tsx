@@ -3,6 +3,7 @@ import { db } from '@/lib/db'
 import { daLenFacebook, linkChiaSe } from '@/lib/linkFacebook'
 import { batBuocDangNhap } from '@/lib/phien'
 import DanhSachNhom, { FormThemNhieuNhom, type Nhom } from './DanhSachNhom'
+import NutChiaSe from './NutChiaSe'
 
 const NGUONG_MOI_NGAY = 15
 // Đầu ngày hôm nay theo giờ Việt Nam (gọi ngoài render)
@@ -75,15 +76,9 @@ export default async function DangNhom({ searchParams }: PageProps<'/quan-ly/dan
               </p>
               <div className="mt-2 flex flex-wrap gap-2">
                 {baiTrenPage.map((d) => (
-                  <a
-                    key={d.fb_post_id}
-                    href={linkChiaSe(d.fb_post_id!)}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="rounded-md bg-chinh px-3 py-1.5 text-sm font-semibold text-white hover:bg-chinh-dam"
-                  >
+                  <NutChiaSe key={d.fb_post_id} link={linkChiaSe(d.fb_post_id!)} className="rounded-md bg-chinh px-3 py-1.5 text-sm font-semibold text-white hover:bg-chinh-dam">
                     Chia sẻ bài của {d.trang?.ten ?? 'Page'}
-                  </a>
+                  </NutChiaSe>
                 ))}
               </div>
             </div>

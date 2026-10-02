@@ -3,6 +3,7 @@
 import { useActionState, useEffect, useEffectEvent, useState, useTransition } from 'react'
 import { danhDauDaDangNhom, themNhieuNhom, xoaNhom } from '../dang-bai/actions'
 import { NutHanhDong } from '../NutHanhDong'
+import { moCuaSoFacebook } from './moCuaSo'
 
 export type Nhom = { id: string; ten: string; link: string; ghi_chu: string | null; daDangBaiNay: string | null; lanCuoi: string | null }
 
@@ -58,15 +59,15 @@ function ThanhChep({ noiDung, anh }: { noiDung: string; anh: string[] }) {
     <div className="w-full rounded-lg bg-white p-2">
       <ol className="space-y-1 text-xs text-phu">
         <li>
-          <b>1.</b> Sang tab nhóm, bấm ô <b>“Bạn viết gì đi…”</b> → <b>Ctrl+V</b> để dán chữ.
+          <b>1.</b> Ở cửa sổ Facebook bên phải, bấm ô <b>“Bạn viết gì đi…”</b> → <b>Ctrl+V</b> để dán chữ.
         </li>
         {anh.length > 0 && (
           <li>
-            <b>2.</b> Bấm <b>Chép ảnh</b> dưới đây → sang tab nhóm bấm vào ô đang soạn → <b>Ctrl+V</b>. Mỗi ảnh làm một lần.
+            <b>2.</b> Bấm <b>Chép ảnh</b> dưới đây → bấm vào ô đang soạn ở cửa sổ Facebook → <b>Ctrl+V</b>. Mỗi ảnh làm một lần.
           </li>
         )}
         <li>
-          <b>{anh.length ? 3 : 2}.</b> Bấm <b>Đăng</b> trên Facebook, quay lại đây bấm <b>Enter</b>.
+          <b>{anh.length ? 3 : 2}.</b> Bấm <b>Đăng</b>, rồi bấm vào phần mềm (bên trái) và nhấn <b>Enter</b>.
         </li>
       </ol>
       <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -100,7 +101,7 @@ function ThanhChep({ noiDung, anh }: { noiDung: string; anh: string[] }) {
 
 function chepVaMo(noiDung: string, link: string) {
   navigator.clipboard.writeText(noiDung).catch(() => {})
-  window.open(link, '_blank', 'noopener')
+  moCuaSoFacebook(link)
 }
 
 // Đường dẫn của Facebook có dạng /groups/... nhưng không phải nhóm
