@@ -40,28 +40,137 @@ function chepVaMo(noiDung: string, link: string) {
   window.open(link, '_blank', 'noopener')
 }
 
+// Đường dẫn của Facebook có dạng /groups/... nhưng không phải nhóm
+const KHONG_PHAI_NHOM = new Set(['joins', 'feed', 'discover', 'create', 'notifications', 'search', 'category', 'you', 'manage', 'pending', 'invites'])
+
+// Lấy nhóm từ nội dung HTML người dùng tự chép (Ctrl+A, Ctrl+C) ở trang "Nhóm của bạn" trên Facebook
+function layNhomTuHtml(html: string) {
+  const doc = new DOMParser().parseFromString(html, 'text/html')
+  const theoMa = new Map<string, string>()
+  for (const a of Array.from(doc.querySelectorAll('a[href*="/groups/"]'))) {
+    const m = (a.getAttribute('href') ?? '').match(/facebook\.com\/groups\/([\w.-]+)|^\/groups\/([\w.-]+)/)
+    const ma = m?.[1] ?? m?.[2]
+    if (!ma || KHONG_PHAI_NHOM.has(ma.toLowerCase())) continue
+    // Một nhóm có nhiều thẻ link (ảnh, tên, "Xem nhóm"): giữ chữ dài nhất làm tên, bỏ dòng phụ
+    const ten = (a.textContent ?? '').split(/\n|Lần hoạt động|Last active|Xem nhóm|View group/)[0].replace(/\s+/g, ' ').trim()
+    if (!theoMa.has(ma) || ten.length > (theoMa.get(ma) ?? '').length) theoMa.set(ma, ten.slice(0, 120))
+  }
+  return [...theoMa.entries()].map(([ma, ten]) => ({ ten, link: `https://www.facebook.com/groups/${ma}` }))
+}
+
 export function FormThemNhieuNhom() {
-  const [kq, gui, dang] = useActionState(themNhieuNhom, null)
+  const [timDuoc, setTimDuoc] = useState<{ ten: string; link: string }[]>([])
+  const [boChon, setBoChon] = useState<Set<string>>(new Set())
+  const [danhSach, setDanhSach] = useState('')
+  const [kq, gui, dang] = useActionState(async (truoc: Awaited<ReturnType<typeof themNhieuNhom>> | null, f: FormData) => {
+    const r = await themNhieuNhom(truoc, f)
+    if (r.ok) {
+      setTimDuoc([])
+      setDanhSach('')
+    }
+    return r
+  }, null)
+  const [loiDan, setLoiDan] = useState('')
+  const [nhapTay, setNhapTay] = useState(false)
+
+  function khiDan(e: React.ClipboardEvent) {
+    const html = e.clipboardData.getData('text/html')
+    if (!html) return // dán chữ thường (link) thì để ô nhập tay xử lý
+    e.preventDefault()
+    const ds = layNhomTuHtml(html)
+    setLoiDan(ds.length ? '' : 'Không thấy nhóm nào trong nội dung vừa dán. Hãy chắc là bạn chép ở trang danh sách nhóm và đã cuộn xuống hết.')
+    setTimDuoc(ds)
+    setBoChon(new Set())
+  }
+
+  const daChon = timDuoc.filter((n) => !boChon.has(n.link))
+  // Gửi cho máy chủ theo định dạng "Tên | link" mỗi dòng
+  const giaTriGui = timDuoc.length ? daChon.map((n) => `${n.ten} | ${n.link}`).join('\n') : danhSach
+
   return (
-    <form action={gui} className="grid gap-2 rounded-xl border border-slate-200 bg-white p-4">
-      <p className="font-semibold">Thêm nhóm đã tham gia</p>
-      <p className="text-xs text-phu">
-        Mở{' '}
-        <a href="https://www.facebook.com/groups/joins/" target="_blank" rel="noreferrer" className="text-chinh underline">
-          danh sách nhóm của bạn
-        </a>{' '}
-        trên Facebook, chuột phải vào tên nhóm → Sao chép địa chỉ liên kết, rồi dán vào đây. Mỗi dòng một nhóm, có thể ghi tên trước: <i>Tên nhóm | link</i>. Link trùng tự bỏ qua.
-      </p>
-      <textarea
-        name="danh_sach"
-        rows={5}
-        required
-        placeholder={'https://www.facebook.com/groups/chothanhlyhanoi\nHội mẹ bỉm sữa | https://www.facebook.com/groups/123456789'}
-        className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
-      />
-      <button disabled={dang} className="justify-self-start rounded-lg bg-chinh px-4 py-2 text-sm font-semibold text-white hover:bg-chinh-dam disabled:opacity-50">
-        {dang ? 'Đang thêm…' : 'Thêm các nhóm'}
-      </button>
+    <form action={gui} className="grid gap-3 rounded-xl border border-slate-200 bg-white p-4">
+      <p className="font-semibold">Lấy danh sách nhóm đã tham gia</p>
+      <ol className="list-decimal space-y-1 pl-5 text-sm text-phu">
+        <li>
+          Mở{' '}
+          <a href="https://www.facebook.com/groups/joins/" target="_blank" rel="noreferrer" className="font-semibold text-chinh underline">
+            trang Nhóm của bạn trên Facebook
+          </a>{' '}
+          (máy tính), cuộn xuống cuối để hiện hết nhóm.
+        </li>
+        <li>
+          Bấm <b>Ctrl+A</b> rồi <b>Ctrl+C</b>.
+        </li>
+        <li>
+          Quay lại đây, bấm vào ô bên dưới rồi <b>Ctrl+V</b>.
+        </li>
+      </ol>
+      <div
+        tabIndex={0}
+        onPaste={khiDan}
+        className="grid min-h-20 place-items-center rounded-lg border-2 border-dashed border-chinh/40 bg-blue-50/50 p-3 text-center text-sm text-chinh focus:border-chinh focus:outline-none"
+      >
+        Bấm vào đây rồi Ctrl+V
+      </div>
+      {loiDan && <p className="text-sm text-red-600">{loiDan}</p>}
+
+      {timDuoc.length > 0 && (
+        <div className="rounded-lg border border-slate-200">
+          <div className="flex items-center gap-3 border-b border-slate-100 px-3 py-2 text-sm">
+            <b>Tìm thấy {timDuoc.length} nhóm</b>
+            <button type="button" onClick={() => setBoChon(new Set())} className="text-chinh hover:underline">
+              Chọn tất cả
+            </button>
+            <button type="button" onClick={() => setBoChon(new Set(timDuoc.map((n) => n.link)))} className="text-phu hover:underline">
+              Bỏ chọn hết
+            </button>
+          </div>
+          <ul className="max-h-72 overflow-y-auto px-3 py-1 text-sm">
+            {timDuoc.map((n) => (
+              <li key={n.link} className="flex items-center gap-2 py-1">
+                <input
+                  type="checkbox"
+                  checked={!boChon.has(n.link)}
+                  onChange={() =>
+                    setBoChon((s) => {
+                      const m = new Set(s)
+                      if (m.has(n.link)) m.delete(n.link)
+                      else m.add(n.link)
+                      return m
+                    })
+                  }
+                />
+                <span className="truncate">{n.ten || n.link}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {nhapTay && !timDuoc.length && (
+        <textarea
+          value={danhSach}
+          onChange={(e) => setDanhSach(e.target.value)}
+          rows={4}
+          placeholder={'Mỗi dòng một link nhóm, có thể ghi tên trước:\nHội mẹ bỉm sữa | https://www.facebook.com/groups/123456789'}
+          className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
+        />
+      )}
+      <input type="hidden" name="danh_sach" value={giaTriGui} />
+
+      <div className="flex flex-wrap items-center gap-3">
+        <button
+          disabled={dang || !giaTriGui.trim()}
+          className="rounded-lg bg-chinh px-4 py-2 text-sm font-semibold text-white hover:bg-chinh-dam disabled:opacity-50"
+        >
+          {dang ? 'Đang thêm…' : timDuoc.length ? `Thêm ${daChon.length} nhóm đã chọn` : 'Thêm các nhóm'}
+        </button>
+        {!timDuoc.length && (
+          <button type="button" onClick={() => setNhapTay(!nhapTay)} className="text-xs text-phu hover:underline">
+            {nhapTay ? 'Ẩn ô nhập link' : 'Hoặc dán từng link'}
+          </button>
+        )}
+      </div>
       {kq && <p className={`text-sm ${kq.ok ? 'text-green-700' : 'text-red-600'}`}>{kq.thongBao}</p>}
     </form>
   )
