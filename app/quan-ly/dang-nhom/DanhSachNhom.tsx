@@ -1,6 +1,7 @@
 'use client'
 
 import { useActionState, useEffect, useEffectEvent, useState, useTransition } from 'react'
+import { useRouter } from 'next/navigation'
 import { boDanhDauNhom, danhDauDaDangNhom, themNhieuNhom, xoaNhom } from '../dang-bai/actions'
 import { NutHanhDong } from '../NutHanhDong'
 import { moCuaSoFacebook } from './moCuaSo'
@@ -239,7 +240,19 @@ export function FormThemNhieuNhom() {
   )
 }
 
-export default function DanhSachNhom({ nhom, bai }: { nhom: Nhom[]; bai: { id: string; noiDung: string; bienThe: string[]; anh: string[] } | null }) {
+export default function DanhSachNhom({ nhom: nhomGoc, bai }: { nhom: Nhom[]; bai: { id: string; noiDung: string; bienThe: string[]; anh: string[] } | null }) {
+  const router = useRouter()
+  // Đánh dấu ngay trên màn hình (không chờ máy chủ): id nhóm → thời điểm đánh dấu, null = vừa bỏ đánh dấu
+  const [tamThoi, setTamThoi] = useState<Map<string, string | null>>(new Map())
+  const nhom = nhomGoc.map((n) => (tamThoi.has(n.id) ? { ...n, daDangBaiNay: tamThoi.get(n.id)! } : n))
+  function luuDanhDau(nhomId: string, daDang: boolean) {
+    if (!bai) return
+    setTamThoi((m) => new Map(m).set(nhomId, daDang ? new Date().toISOString() : null))
+    chay(async () => {
+      await (daDang ? danhDauDaDangNhom(nhomId, bai.id) : boDanhDauNhom(nhomId, bai.id))
+      router.refresh()
+    })
+  }
   // Các phiên bản nội dung: xoay vòng mỗi nhóm một bản
   const banNoiDung = bai ? [bai.noiDung, ...bai.bienThe].filter((x) => x.trim()) : []
   const noiDungThu = (i: number) => (banNoiDung.length ? banNoiDung[i % banNoiDung.length] : '')
@@ -274,7 +287,7 @@ export default function DanhSachNhom({ nhom, bai }: { nhom: Nhom[]; bai: { id: s
     const hienTai = hangDoi[viTri]
     const sau = hangDoi[viTri + 1]
     if (sau) chepVaMo(noiDungThu(viTri + 1), theoId.get(sau)!.link)
-    if (daDang) chay(() => danhDauDaDangNhom(hienTai, bai.id))
+    if (daDang) luuDanhDau(hienTai, true)
     setChon((c) => {
       const m = new Set(c)
       m.delete(hienTai)
@@ -449,7 +462,7 @@ export default function DanhSachNhom({ nhom, bai }: { nhom: Nhom[]; bai: { id: s
               </button>
             )}
             {tab === 'da' && bai && (
-              <button onClick={() => chay(() => boDanhDauNhom(n.id, bai.id))} className="text-xs text-phu hover:underline">
+              <button onClick={() => luuDanhDau(n.id, false)} className="text-xs text-phu hover:underline">
                 Bỏ đánh dấu
               </button>
             )}
@@ -464,7 +477,7 @@ export default function DanhSachNhom({ nhom, bai }: { nhom: Nhom[]; bai: { id: s
               <div className="basis-full space-y-2 pb-1">
                 <ThanhChep noiDung={noiDungThu(nhom.indexOf(n))} anh={bai.anh} />
                 <button
-                  onClick={() => (chay(() => danhDauDaDangNhom(n.id, bai.id)), setMoLe(null))}
+                  onClick={() => (luuDanhDau(n.id, true), setMoLe(null))}
                   className="w-full rounded-md bg-green-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-green-700"
                 >
                   ✓ Đã đăng nhóm này
