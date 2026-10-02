@@ -1,64 +1,84 @@
 import { db } from '@/lib/db'
 import { batBuocDangNhap } from '@/lib/phien'
-import { batTatTuDong, themTuDong, xoaTuDong } from '../actions'
-import { CongTac, NutHanhDong } from '../NutHanhDong'
-
-const AP_DUNG = { ca_hai: 'Tin nhắn + bình luận', tin_nhan: 'Chỉ tin nhắn', binh_luan: 'Chỉ bình luận' } as const
-const O = 'rounded-lg border border-slate-300 px-3 py-2 text-sm'
+import type { KichBan } from '@/lib/tuDong'
+import { ISet, ITinNhan } from '../BieuTuong'
+import { KhuSoan, TheKichBan } from './KichBanClient'
 
 export default async function TuDong() {
   const { trangChu: trangIds } = await batBuocDangNhap()
-  const [{ data: trang }, { data: kb }] = await Promise.all([
+  const [{ data: dsTrang }, { data: dsKb }] = await Promise.all([
     db().from('fb_trang').select('id, ten').in('id', trangIds).order('ten'),
-    db().from('tu_dong').select('id, trang_id, tu_khoa, tra_loi, ap_dung, bat').in('trang_id', trangIds),
+    // select('*'): vẫn hiện được khi chưa thêm cột mới vào cơ sở dữ liệu
+    db().from('tu_dong').select('*').in('trang_id', trangIds),
   ])
-  const tenTrang = new Map((trang ?? []).map((t) => [t.id, t.ten]))
-  return (
-    <div className="mx-auto h-full max-w-3xl overflow-y-auto px-4 py-8">
-      <h1 className="text-2xl font-bold">Tự động trả lời theo từ khóa</h1>
-      <p className="mt-2 text-sm text-phu">
-        Khi tin nhắn hoặc bình luận của khách chứa một trong các từ khóa, hệ thống tự gửi câu trả lời. Ví dụ từ khóa: giá, bao nhiêu, ib.
-      </p>
-      {trang?.length ? (
-        <form action={themTuDong} className="mt-6 grid gap-3 rounded-xl border border-slate-200 bg-white p-4 sm:grid-cols-2">
-          <select name="trang_id" className={O}>
-            {trang.map((t) => (
-              <option key={t.id} value={t.id}>{t.ten}</option>
-            ))}
-          </select>
-          <select name="ap_dung" className={O}>
-            {Object.entries(AP_DUNG).map(([k, v]) => (
-              <option key={k} value={k}>{v}</option>
-            ))}
-          </select>
-          <input name="tu_khoa" required placeholder="Từ khóa, cách nhau bằng dấu phẩy" className={`${O} sm:col-span-2`} />
-          <textarea name="tra_loi" required rows={3} placeholder="Nội dung trả lời" className={`${O} sm:col-span-2`} />
-          <button className="rounded-lg bg-chinh px-4 py-2 font-semibold text-white hover:bg-chinh-dam sm:col-span-2 sm:justify-self-end">
-            Thêm kịch bản
-          </button>
-        </form>
-      ) : (
-        <p className="mt-6 text-phu">Chưa có Fanpage nào được kết nối.</p>
-      )}
-      <ul className="mt-6 space-y-3">
-        {(kb ?? []).map((k) => (
-          <li key={k.id} className="rounded-xl border border-slate-200 bg-white p-4">
-            <div className="flex flex-wrap items-center gap-2 text-xs text-phu">
-              <span className="font-semibold text-chu">{tenTrang.get(k.trang_id)}</span>·<span>{AP_DUNG[k.ap_dung as keyof typeof AP_DUNG]}</span>
-              <NutHanhDong chay={xoaTuDong.bind(null, k.id)} xacNhan="Xóa kịch bản này?" className="ml-auto text-red-600 hover:underline">
-                Xóa
-              </NutHanhDong>
-            </div>
-            <div className="mt-2 flex flex-wrap gap-1">
-              {(k.tu_khoa as string[]).map((t) => (
-                <span key={t} className="rounded bg-slate-100 px-2 py-0.5 text-sm">{t}</span>
-              ))}
-            </div>
-            <p className="mt-2 whitespace-pre-wrap text-sm">↳ {k.tra_loi}</p>
-            <CongTac nhan="Đang bật" bat={k.bat} chay={batTatTuDong.bind(null, k.id)} />
-          </li>
-        ))}
+  const trang = (dsTrang ?? []) as { id: string; ten: string }[]
+  const tenTrang = new Map(trang.map((t) => [t.id, t.ten]))
+  const kb = ((dsKb ?? []) as KichBan[]).sort((a, b) => (a.tao_luc ?? '').localeCompare(b.tao_luc ?? ''))
+  const moiTin = kb.filter((k) => !k.tu_khoa.length)
+  const tuKhoa = kb.filter((k) => k.tu_khoa.length)
+  const nhieuTrang = trang.length > 1
+
+  const nhom = (tieuDe: string, moTa: string, bieuTuong: React.ReactNode, ds: KichBan[], trong: string) => (
+    <section>
+      <div className="flex items-start gap-3">
+        <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-white ring-1 ring-slate-200">{bieuTuong}</span>
+        <div>
+          <h2 className="font-semibold">
+            {tieuDe} <span className="font-normal text-phu">({ds.length})</span>
+          </h2>
+          <p className="text-xs text-phu">{moTa}</p>
+        </div>
+      </div>
+      <ul className="mt-3 space-y-3">
+        {ds.length ? (
+          ds.map((k) => <TheKichBan key={k.id} kb={k} tenTrang={nhieuTrang ? tenTrang.get(k.trang_id) : undefined} />)
+        ) : (
+          <li className="rounded-xl border border-dashed border-slate-300 bg-white px-4 py-6 text-center text-sm text-phu">{trong}</li>
+        )}
       </ul>
+    </section>
+  )
+
+  return (
+    <div className="h-full overflow-y-auto">
+      <div className="mx-auto max-w-6xl px-4 py-8">
+        <header className="flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-bold">Tự động trả lời</h1>
+            <p className="mt-1 max-w-2xl text-sm text-phu">
+              Trả lời khách ngay lập tức, cả lúc nửa đêm. Kịch bản có từ khóa được ưu tiên; không khớp từ khóa nào thì dùng kịch bản “mọi tin mới”.
+            </p>
+          </div>
+          {kb.length > 0 && (
+            <div className="flex gap-2 text-sm">
+              <span className="rounded-lg bg-white px-3 py-1.5 ring-1 ring-slate-200">
+                <b className="tabular-nums">{kb.filter((k) => k.bat).length}</b> <span className="text-phu">đang bật</span>
+              </span>
+              <span className="rounded-lg bg-white px-3 py-1.5 ring-1 ring-slate-200">
+                <b className="tabular-nums">{kb.length}</b> <span className="text-phu">kịch bản</span>
+              </span>
+            </div>
+          )}
+        </header>
+
+        {trang.length ? (
+          <div className="mt-6 grid items-start gap-6 lg:grid-cols-[minmax(0,5fr)_minmax(0,6fr)]">
+            <KhuSoan trang={trang} />
+            <div className="space-y-8">
+              {nhom(
+                'Trả lời mọi tin mới',
+                'Lời chào khi khách nhắn, hoặc báo “đã inbox” khi khách bình luận',
+                <ISet className="h-4 w-4 text-amber-600" />,
+                moiTin,
+                'Chưa có. Thử mẫu “Chào khách nhắn tin” hoặc “Bình luận: báo đã inbox”.',
+              )}
+              {nhom('Trả lời theo từ khóa', 'Khách hỏi giá, ship, còn hàng… được trả lời đúng câu hỏi', <ITinNhan className="h-4 w-4 text-chinh" />, tuKhoa, 'Chưa có. Bấm một mẫu bên trái để bắt đầu.')}
+            </div>
+          </div>
+        ) : (
+          <p className="mt-6 rounded-xl border border-dashed border-slate-300 bg-white p-6 text-center text-phu">Chưa có Fanpage nào bạn là chủ. Chỉ chủ Page mới cài được tự động trả lời.</p>
+        )}
+      </div>
     </div>
   )
 }

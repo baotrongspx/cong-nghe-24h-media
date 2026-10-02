@@ -13,7 +13,7 @@ const TINH_NANG = [
   ['📥', 'Hộp thư chung', 'Tin nhắn Messenger và bình luận của mọi Fanpage về một màn hình, cập nhật liên tục.'],
   ['🙈', 'Tự ẩn bình luận có SĐT', 'Bình luận chứa số điện thoại được ẩn ngay, chỉ bạn và khách thấy. Đối thủ không xin được số.'],
   ['📞', 'Tự bắt số điện thoại', 'Số khách gửi trong tin nhắn, bình luận được lưu vào hồ sơ hội thoại, lọc nhanh khách có số.'],
-  ['🤖', 'Tự trả lời theo từ khóa', 'Khách nhắn "giá", "ship", "còn hàng không"… hệ thống trả lời ngay, cả lúc nửa đêm.'],
+  ['🤖', 'Tự động trả lời', 'Chào khách ngay khi nhắn tin, trả lời theo từ khóa "giá", "ship"… Bình luận được trả lời công khai và tự nhắn riêng vào inbox.'],
   ['⚡', 'Mẫu câu trả lời nhanh', 'Gõ /gia, /stk, /ship để chèn câu trả lời soạn sẵn. Nhanh gấp nhiều lần gõ tay.'],
   ['🏷️', 'Gắn thẻ & lọc khách', 'Phân loại Đã chốt, Hỏi giá, Bom hàng… Lọc theo thẻ, theo Page, chưa đọc, có SĐT.'],
   ['💬', 'Trả lời công khai hoặc nhắn riêng', 'Trả lời ngay dưới bình luận hoặc nhắn thẳng vào inbox của người bình luận.'],

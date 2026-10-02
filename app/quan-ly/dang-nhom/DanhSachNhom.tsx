@@ -4,7 +4,7 @@ import { useActionState, useEffect, useEffectEvent, useState, useTransition } fr
 import { useRouter } from 'next/navigation'
 import { boDanhDauNhom, danhDauDaDangNhom, themNhieuNhom, xoaNhom } from '../dang-bai/actions'
 import { NutHanhDong } from '../NutHanhDong'
-import { ChuCaiDau, IChep, IGui, IMoNgoai, INhom, IPhat, ITim, IXoa, IXong, ThanhTienDo } from './BieuTuong'
+import { ChuCaiDau, IChep, IGui, IMoNgoai, INhom, IPhat, ITim, IXoa, IXong, ThanhTienDo } from '../BieuTuong'
 import { moCuaSoFacebook } from './moCuaSo'
 
 export type Nhom = { id: string; ten: string; link: string; ghi_chu: string | null; daDangBaiNay: string | null; lanCuoi: string | null }

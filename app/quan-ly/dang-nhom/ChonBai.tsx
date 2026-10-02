@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { IXong, IXuong } from './BieuTuong'
+import { IXong, IXuong } from '../BieuTuong'
 
 export type BaiNgan = { id: string; tieuDe: string; anh: string | null; ngay: string }
 

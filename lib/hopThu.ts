@@ -1,6 +1,7 @@
 import 'server-only'
 import { db } from '@/lib/db'
-import { anBinhLuan, guiTinNhan, tenKhach, timSoDienThoai, traLoiBinhLuan } from '@/lib/facebook'
+import { anBinhLuan, guiTinNhan, nhanRiengBinhLuan, tenKhach, timSoDienThoai, traLoiBinhLuan } from '@/lib/facebook'
+import { GIO_CHO_TRA_LOI_MOI_TIN, chonKichBan, thayTen, type KichBan } from '@/lib/tuDong'
 
 export type Trang = {
   id: string
@@ -93,17 +94,21 @@ export async function luuTin(t: TinMoi) {
   return { hoiThoaiId: ht.id as string, tinId: tin.id as string, sdt }
 }
 
-// Tìm kịch bản tự trả lời khớp từ khóa
-async function timTraLoiTuDong(trangId: string, loai: 'tin_nhan' | 'binh_luan', noiDung: string | null) {
-  if (!noiDung) return null
-  const { data } = await db()
-    .from('tu_dong')
-    .select('tu_khoa, tra_loi')
-    .eq('trang_id', trangId)
-    .eq('bat', true)
-    .in('ap_dung', [loai, 'ca_hai'])
-  const thuong = noiDung.toLocaleLowerCase('vi')
-  return data?.find((k) => (k.tu_khoa as string[]).some((tk) => tk && thuong.includes(tk.toLocaleLowerCase('vi'))))?.tra_loi ?? null
+// Tìm kịch bản tự trả lời: khớp từ khóa trước, không khớp thì kịch bản "mọi tin" (nếu 24 giờ qua shop chưa nhắn gì cho khách)
+async function timTraLoiTuDong(p: { trangId: string; loai: 'tin_nhan' | 'binh_luan'; noiDung: string | null; hoiThoaiId: string; khachTen?: string | null }) {
+  // select('*'): vẫn chạy khi chưa thêm cột mới (nhan_rieng, tao_luc) vào cơ sở dữ liệu
+  const { data } = await db().from('tu_dong').select('*').eq('trang_id', p.trangId).eq('bat', true).in('ap_dung', [p.loai, 'ca_hai'])
+  const ds = ((data ?? []) as KichBan[]).sort((a, b) => (a.tao_luc ?? '').localeCompare(b.tao_luc ?? ''))
+  const chon = chonKichBan(ds, p.loai, p.noiDung)
+  if (!chon) return null
+  if (chon.moiTin) {
+    const tu = new Date(Date.now() - GIO_CHO_TRA_LOI_MOI_TIN * 3600_000).toISOString()
+    const { count } = await db().from('tin').select('id', { count: 'exact', head: true }).eq('hoi_thoai_id', p.hoiThoaiId).eq('chieu', 'ra').gte('tao_luc', tu)
+    if (count) return null
+  }
+  let ten = p.khachTen
+  if (!ten) ten = (await db().from('hoi_thoai').select('khach_ten').eq('id', p.hoiThoaiId).maybeSingle()).data?.khach_ten
+  return { traLoi: thayTen(chon.kb.tra_loi ?? '', ten).trim(), nhanRieng: thayTen(chon.kb.nhan_rieng ?? '', ten).trim() }
 }
 
 type SuKienNhan = {
@@ -133,10 +138,10 @@ export async function xuLyTinNhan(trang: Trang, e: SuKienNhan) {
   })
   if (!kq || laEcho) return
 
-  const traLoi = await timTraLoiTuDong(trang.id, 'tin_nhan', noiDung)
-  if (traLoi) {
-    const r = await guiTinNhan(trang.access_token, khachId, traLoi)
-    await luuTin({ trang, loai: 'tin_nhan', khachId, fbId: r.message_id, chieu: 'ra', noiDung: traLoi })
+  const td = await timTraLoiTuDong({ trangId: trang.id, loai: 'tin_nhan', noiDung, hoiThoaiId: kq.hoiThoaiId })
+  if (td?.traLoi) {
+    const r = await guiTinNhan(trang.access_token, khachId, td.traLoi)
+    await luuTin({ trang, loai: 'tin_nhan', khachId, fbId: r.message_id, chieu: 'ra', noiDung: td.traLoi })
   }
 }
 
@@ -202,9 +207,20 @@ export async function xuLyBinhLuan(trang: Trang, v: SuKienBinhLuan) {
     }
   }
 
-  const traLoi = await timTraLoiTuDong(trang.id, 'binh_luan', v.message ?? null)
-  if (traLoi) {
-    const r = await traLoiBinhLuan(trang.access_token, v.comment_id, traLoi)
-    await luuTin({ trang, loai: 'binh_luan', khachId: v.from.id, baiVietId: v.post_id ?? '', fbId: r.id, chieu: 'ra', noiDung: traLoi })
+  const td = await timTraLoiTuDong({ trangId: trang.id, loai: 'binh_luan', noiDung: v.message ?? null, hoiThoaiId: kq.hoiThoaiId, khachTen: v.from.name })
+  if (!td) return
+  const chung = { trang, loai: 'binh_luan' as const, khachId: v.from.id, baiVietId: v.post_id ?? '', chieu: 'ra' as const }
+  // Nhắn riêng trước: Facebook chỉ cho nhắn riêng 1 lần cho mỗi bình luận, trong vòng 7 ngày
+  if (td.nhanRieng) {
+    try {
+      const r = await nhanRiengBinhLuan(trang.access_token, v.comment_id, td.nhanRieng)
+      await luuTin({ ...chung, fbId: r.message_id, noiDung: `[Nhắn riêng] ${td.nhanRieng}` })
+    } catch (e) {
+      console.error('Tự nhắn riêng bình luận lỗi:', e)
+    }
+  }
+  if (td.traLoi) {
+    const r = await traLoiBinhLuan(trang.access_token, v.comment_id, td.traLoi)
+    await luuTin({ ...chung, fbId: r.id, noiDung: td.traLoi })
   }
 }

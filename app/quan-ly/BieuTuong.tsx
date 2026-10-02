@@ -1,4 +1,4 @@
-// Biểu tượng nét mảnh (kiểu Lucide), dùng chung cho trang Đăng nhóm
+// Biểu tượng nét mảnh (kiểu Lucide), dùng chung cho các trang quản lý
 type P = { className?: string }
 
 function Svg({ className = 'h-4 w-4', children }: P & { children: React.ReactNode }) {
@@ -73,6 +73,22 @@ export const ICanhBao = (p: P) => (
 export const IMoNgoai = (p: P) => (
   <Svg {...p}>
     <path d="M15 3h6v6M10 14 21 3M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+  </Svg>
+)
+
+export const ISua = (p: P) => (
+  <Svg {...p}>
+    <path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
+  </Svg>
+)
+export const ITinNhan = (p: P) => (
+  <Svg {...p}>
+    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2Z" />
+  </Svg>
+)
+export const ISet = (p: P) => (
+  <Svg {...p}>
+    <path d="M13 2 3 14h9l-1 8 10-12h-9l1-8Z" />
   </Svg>
 )
 

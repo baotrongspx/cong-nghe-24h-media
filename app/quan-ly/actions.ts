@@ -7,6 +7,7 @@ import { LoiFacebook, anBinhLuan, guiTinNhan, nhanRiengBinhLuan, traLoiBinhLuan 
 import { COT_TRANG, luuTin, type Trang } from '@/lib/hopThu'
 import { goiHieuLuc, timGoi } from '@/lib/goiCuoc'
 import { COT_DON, noiDungXacNhan, type DonHang } from '@/lib/donHang'
+import { AP_DUNG, type ApDung } from '@/lib/tuDong'
 import { batBuocDangNhap, batBuocQuanTri, locDonHang, locHoiThoai } from '@/lib/phien'
 
 export type KetQua = { ok: boolean; thongBao?: string }
@@ -172,20 +173,47 @@ export async function goTrang(trangId: string) {
 }
 
 // ---- Tự động trả lời ----
-export async function themTuDong(form: FormData) {
-  const trangId = String(form.get('trang_id'))
-  await kiemTraTrang(trangId)
-  const tuKhoa = String(form.get('tu_khoa') ?? '')
-    .split(',')
-    .map((s) => s.trim())
-    .filter(Boolean)
-  const traLoi = String(form.get('tra_loi') ?? '').trim()
-  if (!tuKhoa.length || !traLoi) return
-  await db()
-    .from('tu_dong')
-    .insert({ trang_id: trangId, tu_khoa: tuKhoa, tra_loi: traLoi, ap_dung: String(form.get('ap_dung') ?? 'ca_hai') })
-  revalidatePath('/quan-ly/tu-dong')
+// Thêm (một Page hoặc mọi Page) hoặc sửa kịch bản. tuKhoa rỗng = trả lời mọi tin / bình luận.
+export async function luuTuDong(d: {
+  id?: string
+  trangId: string // 'tat_ca' = thêm cho mọi Page mình là chủ
+  tuKhoa: string[]
+  apDung: ApDung
+  traLoi: string
+  nhanRieng: string
+}): Promise<KetQua> {
+  try {
+    const { trangChu } = await batBuocDangNhap()
+    const apDung: ApDung = d.apDung in AP_DUNG ? d.apDung : 'ca_hai'
+    const tuKhoa = [...new Set(d.tuKhoa.map((s) => s.trim()).filter(Boolean))].slice(0, 50)
+    const traLoi = d.traLoi.trim().slice(0, 2000)
+    // Nhắn riêng chỉ dùng cho bình luận
+    const nhanRieng = apDung === 'tin_nhan' ? '' : d.nhanRieng.trim().slice(0, 2000)
+    if (apDung !== 'binh_luan' && !traLoi) return { ok: false, thongBao: 'Chưa nhập nội dung trả lời' }
+    if (!traLoi && !nhanRieng) return { ok: false, thongBao: 'Nhập nội dung trả lời công khai hoặc nhắn riêng' }
+    // Mẫu soạn sẵn có chỗ [điền …]: không để lọt sang khách
+    if (/\[[^\]]*\]/.test(traLoi + nhanRieng)) return { ok: false, thongBao: 'Nội dung còn chỗ [ ] chưa điền, hãy thay bằng thông tin của shop' }
+    const giaTri = { tu_khoa: tuKhoa, ap_dung: apDung, tra_loi: traLoi, nhan_rieng: nhanRieng }
+
+    if (d.id) {
+      await tuDongCuaToi(d.id)
+      const { error } = await db().from('tu_dong').update(giaTri).eq('id', d.id)
+      if (error) return { ok: false, thongBao: loiCot(error.message) }
+    } else {
+      const trangIds = d.trangId === 'tat_ca' ? trangChu : trangChu.filter((t) => t === d.trangId)
+      if (!trangIds.length) return { ok: false, thongBao: 'Chỉ chủ Page mới thêm được kịch bản' }
+      const { error } = await db().from('tu_dong').insert(trangIds.map((trang_id) => ({ ...giaTri, trang_id })))
+      if (error) return { ok: false, thongBao: loiCot(error.message) }
+    }
+    revalidatePath('/quan-ly/tu-dong')
+    return { ok: true }
+  } catch (e) {
+    return { ok: false, thongBao: e instanceof Error ? e.message : 'Có lỗi xảy ra' }
+  }
 }
+
+// Chưa chạy phần "Tự động trả lời nâng cao" trong supabase/schema.sql
+const loiCot = (s: string) => (/nhan_rieng|tao_luc/.test(s) ? 'Cơ sở dữ liệu chưa cập nhật: hãy chạy lại file supabase/schema.sql trong Supabase.' : s)
 
 async function tuDongCuaToi(id: string) {
   const { data } = await db().from('tu_dong').select('trang_id').eq('id', id).maybeSingle()

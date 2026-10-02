@@ -201,3 +201,10 @@ create table if not exists don_hang (
 create index if not exists don_hang_trang_tao on don_hang (trang_id, tao_luc desc);
 create index if not exists don_hang_hoi_thoai on don_hang (hoi_thoai_id);
 alter table don_hang enable row level security;
+
+-- ============ Tự động trả lời nâng cao ============
+-- tu_khoa rỗng ('{}') = trả lời mọi tin / bình luận không khớp từ khóa nào (mỗi khách tối đa 1 lần / 24 giờ)
+-- tra_loi: trả lời tin nhắn và trả lời công khai dưới bình luận ('' = không trả lời công khai)
+-- nhan_rieng: với bình luận, nhắn riêng vào inbox người bình luận ('' = không nhắn)
+alter table tu_dong add column if not exists nhan_rieng text not null default '';
+alter table tu_dong add column if not exists tao_luc timestamptz not null default now();
