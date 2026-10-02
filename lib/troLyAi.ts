@@ -12,8 +12,8 @@ export type CaiDatAi = {
   toan_quyen?: boolean // AI trả lời mọi tình huống: đứng trước kịch bản từ khóa, không im lặng, không tự dừng
 }
 
-// Khách cần người thật: AI im lặng với hội thoại này trong ngần ấy giờ, và gắn thẻ để nhân viên thấy
-const GIO_DUNG_KHI_CAN_NGUOI = 12
+// Ca khó (phàn nàn, câu hỏi ngoài thông tin shop, khách chốt đơn): AI vẫn trả lời, chỉ gắn thẻ này để nhân viên theo dõi.
+// AI không bao giờ tự dừng; nhân viên muốn tự chăm khách thì bấm tạm dừng AI trong Hộp thư.
 export const THE_CAN_NGUOI = 'Cần tư vấn'
 
 export type MauTraLoi = { tuKhoa: string[]; traLoi: string }
@@ -56,8 +56,8 @@ ${
   · Phàn nàn, đổi trả, hàng lỗi → xin lỗi, xin mã đơn / ảnh sản phẩm / số điện thoại, hứa shop xử lý ngay.
   · Khách gửi đủ thông tin đặt hàng → xác nhận lại đơn và báo shop sẽ gọi xác nhận.
 - Đặt can_nguoi_that = true (chỉ để nhân viên theo dõi, bạn vẫn trả lời bình thường) khi: phàn nàn, đổi trả, câu hỏi ngoài thông tin shop, hoặc khách vừa gửi đủ thông tin đặt hàng.`
-    : `- Khi không chắc, nói shop sẽ kiểm tra và báo lại ngay, rồi đặt can_nguoi_that = true.
-- Đặt can_nguoi_that = true khi: khách phàn nàn, đổi trả, hỏi điều ngoài thông tin shop, muốn gặp người thật, hoặc đã sẵn sàng đặt hàng và gửi đủ thông tin nhận hàng (để nhân viên lên đơn).`
+    : `- Khi không chắc, nói shop sẽ kiểm tra và báo lại ngay, xin số điện thoại nếu chưa có.
+- Đặt can_nguoi_that = true (để nhân viên theo dõi, bạn vẫn trả lời bình thường) khi: khách phàn nàn, đổi trả, hỏi điều ngoài thông tin shop, muốn gặp người thật, hoặc đã gửi đủ thông tin đặt hàng.`
 }${
     p.loai === 'binh_luan'
       ? '\n- Đây là trả lời CÔNG KHAI dưới bình luận: thật ngắn (1–2 câu), không ghi giá chi tiết, số điện thoại hay địa chỉ của khách; mời khách nhắn tin cho shop để được tư vấn.'
@@ -108,7 +108,7 @@ export async function traLoiBangAi(p: {
   const toanQuyen = !!cd.toan_quyen
 
   const { data: ht } = await db().from('hoi_thoai').select('khach_ten, the, ai_tam_dung_den').eq('id', p.hoiThoaiId).maybeSingle()
-  // Tạm dừng (nhân viên tự tắt AI với khách này, hoặc AI đã chuyển cho người thật): luôn tôn trọng
+  // Nhân viên tự tạm dừng AI với khách này trong Hộp thư: luôn tôn trọng
   if (ht?.ai_tam_dung_den && new Date(ht.ai_tam_dung_den) > new Date()) return null
 
   // Nhân viên vừa trả lời (không phải tin tự động): để người thật nói tiếp. Chế độ trả lời mọi tình huống thì bỏ qua.
@@ -140,15 +140,9 @@ export async function traLoiBangAi(p: {
     hoiThoai,
   )
   if (kq.canNguoiThat) {
-    // Gắn thẻ cho nhân viên theo dõi; chỉ tạm dừng AI khi không ở chế độ trả lời mọi tình huống
+    // Gắn thẻ cho nhân viên theo dõi (AI vẫn trả lời tiếp)
     const the = (ht?.the as string[] | undefined) ?? []
-    await db()
-      .from('hoi_thoai')
-      .update({
-        ...(toanQuyen ? {} : { ai_tam_dung_den: new Date(Date.now() + GIO_DUNG_KHI_CAN_NGUOI * 3600_000).toISOString() }),
-        ...(the.includes(THE_CAN_NGUOI) ? {} : { the: [...the, THE_CAN_NGUOI] }),
-      })
-      .eq('id', p.hoiThoaiId)
+    if (!the.includes(THE_CAN_NGUOI)) await db().from('hoi_thoai').update({ the: [...the, THE_CAN_NGUOI] }).eq('id', p.hoiThoaiId)
   }
   return kq.traLoi || null
 }

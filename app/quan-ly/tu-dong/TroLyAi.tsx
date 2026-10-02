@@ -123,7 +123,7 @@ function FormAi({ trangId, dau, coKhoa }: { trangId: string; dau: CaiDatAiView; 
           <p className="text-xs text-phu">
             {g.toan_quyen
               ? 'AI trả lời mọi tin, kể cả khi khớp kịch bản từ khóa (dùng làm câu mẫu), lúc nhân viên vừa nhắn, hay ca khó (chỉ gắn thẻ “Cần tư vấn”).'
-              : 'Tắt: AI chỉ trả lời tin không khớp từ khóa, im lặng khi nhân viên vừa nhắn và dừng lại ở ca khó.'}
+              : 'Tắt: kịch bản từ khóa trả lời trước, AI trả lời các tin còn lại và im lặng khi nhân viên vừa nhắn.'}
           </p>
         </div>
         <CongTacNho bat={!!g.toan_quyen} doi={(toan_quyen) => doi({ toan_quyen })} nhan="Trả lời mọi tình huống" />
@@ -227,7 +227,7 @@ function FormAi({ trangId, dau, coKhoa }: { trangId: string; dau: CaiDatAiView; 
               <>
                 <p className="ml-auto w-fit max-w-[85%] whitespace-pre-wrap rounded-2xl bg-chinh px-3 py-2 text-sm text-white">{thu.traLoi}</p>
                 {thu.canNguoiThat && (
-                  <p className="text-right text-xs text-amber-700">{g.toan_quyen ? 'AI vẫn trả lời tiếp, và gắn thẻ “Cần tư vấn” để nhân viên theo dõi.' : 'AI sẽ dừng với khách này và gắn thẻ “Cần tư vấn” để nhân viên xử lý tiếp.'}</p>
+                  <p className="text-right text-xs text-amber-700">AI vẫn trả lời tiếp, và gắn thẻ “Cần tư vấn” để nhân viên theo dõi.</p>
                 )}
               </>
             )}
@@ -254,7 +254,7 @@ export default function TroLyAi({ trang, caiDat, coKhoa }: { trang: Trang[]; cai
             {soBat > 0 && <span className="rounded-md bg-green-100 px-1.5 py-0.5 text-[11px] font-medium text-green-700">Đang bật {soBat} Page</span>}
           </h2>
           <p className="mt-0.5 text-xs text-phu">
-            AI đọc lịch sử chat và trả lời như nhân viên, dựa trên thông tin shop bạn cung cấp. Gặp câu khó, khiếu nại hoặc khách chốt đơn, AI dừng lại và gắn thẻ để nhân viên xử lý.
+            AI đọc lịch sử chat và trả lời như nhân viên, dựa trên thông tin shop bạn cung cấp. Gặp câu khó, khiếu nại hoặc khách chốt đơn, AI vẫn trả lời và gắn thẻ “Cần tư vấn” để nhân viên theo dõi.
           </p>
         </div>
       </div>
