@@ -5,6 +5,10 @@ import { urlDangNhap } from '@/lib/facebook'
 
 // Chuyển sang hộp thoại đăng nhập Facebook. state chống giả mạo yêu cầu (CSRF).
 export async function GET(req: NextRequest) {
+  if (!process.env.FACEBOOK_APP_ID || !process.env.FACEBOOK_APP_SECRET || !process.env.SESSION_SECRET) {
+    const loi = 'Máy chủ chưa cấu hình FACEBOOK_APP_ID / FACEBOOK_APP_SECRET / SESSION_SECRET. Thêm vào Vercel rồi Redeploy.'
+    return NextResponse.redirect(new URL(`/dang-nhap?loi=${encodeURIComponent(loi)}`, req.url))
+  }
   const state = randomBytes(16).toString('hex')
   ;(await cookies()).set('fb_state', state, {
     httpOnly: true,
