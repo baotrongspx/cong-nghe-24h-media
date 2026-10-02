@@ -35,6 +35,69 @@ function tuGoiY(nhom: Nhom[]) {
 }
 
 // Chép bài và mở nhóm trong cùng một cú bấm (trình duyệt chỉ cho mở tab mới khi người dùng bấm)
+// Chép ảnh vào bộ nhớ tạm để dán (Ctrl+V) thẳng vào ô đăng bài Facebook. Trình duyệt chỉ nhận PNG nên đổi định dạng nếu cần.
+async function chepAnh(url: string) {
+  const goc = await (await fetch(url)).blob()
+  let png = goc
+  if (goc.type !== 'image/png') {
+    const hinh = await createImageBitmap(goc)
+    const c = document.createElement('canvas')
+    c.width = hinh.width
+    c.height = hinh.height
+    c.getContext('2d')!.drawImage(hinh, 0, 0)
+    png = await new Promise<Blob>((ok, loi) => c.toBlob((b) => (b ? ok(b) : loi(new Error('Không đổi được ảnh'))), 'image/png'))
+  }
+  await navigator.clipboard.write([new ClipboardItem({ 'image/png': png })])
+}
+
+// Nút chép chữ + chép từng ảnh, dùng sau khi đã mở nhóm
+function ThanhChep({ noiDung, anh }: { noiDung: string; anh: string[] }) {
+  const [daChep, setDaChep] = useState<string>('chu')
+  const [loi, setLoi] = useState('')
+  return (
+    <div className="w-full rounded-lg bg-white p-2">
+      <ol className="space-y-1 text-xs text-phu">
+        <li>
+          <b>1.</b> Sang tab nhóm, bấm ô <b>“Bạn viết gì đi…”</b> → <b>Ctrl+V</b> để dán chữ.
+        </li>
+        {anh.length > 0 && (
+          <li>
+            <b>2.</b> Bấm <b>Chép ảnh</b> dưới đây → sang tab nhóm bấm vào ô đang soạn → <b>Ctrl+V</b>. Mỗi ảnh làm một lần.
+          </li>
+        )}
+        <li>
+          <b>{anh.length ? 3 : 2}.</b> Bấm <b>Đăng</b> trên Facebook, quay lại đây bấm <b>Enter</b>.
+        </li>
+      </ol>
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          onClick={() => navigator.clipboard.writeText(noiDung).then(() => setDaChep('chu'))}
+          className={`rounded-md px-2 py-1 text-xs font-semibold ${daChep === 'chu' ? 'bg-green-600 text-white' : 'border border-slate-300'}`}
+        >
+          {daChep === 'chu' ? '✓ Đã chép chữ' : 'Chép chữ'}
+        </button>
+        {anh.map((u, i) => (
+          <button
+            key={u}
+            type="button"
+            onClick={() =>
+              chepAnh(u)
+                .then(() => (setDaChep(u), setLoi('')))
+                .catch(() => setLoi('Trình duyệt không cho chép ảnh. Hãy mở ảnh, chuột phải → Sao chép hình ảnh.'))
+            }
+            className={`flex items-center gap-1 rounded-md p-0.5 pr-2 text-xs font-semibold ${daChep === u ? 'bg-green-600 text-white' : 'border border-slate-300'}`}
+          >
+            <img src={u} alt="" className="h-7 w-7 rounded object-cover" />
+            {daChep === u ? '✓ Đã chép' : `Chép ảnh ${i + 1}`}
+          </button>
+        ))}
+      </div>
+      {loi && <p className="mt-1 text-xs text-red-600">{loi}</p>}
+    </div>
+  )
+}
+
 function chepVaMo(noiDung: string, link: string) {
   navigator.clipboard.writeText(noiDung).catch(() => {})
   window.open(link, '_blank', 'noopener')
@@ -176,7 +239,7 @@ export function FormThemNhieuNhom() {
   )
 }
 
-export default function DanhSachNhom({ nhom, bai }: { nhom: Nhom[]; bai: { id: string; noiDung: string; bienThe: string[] } | null }) {
+export default function DanhSachNhom({ nhom, bai }: { nhom: Nhom[]; bai: { id: string; noiDung: string; bienThe: string[]; anh: string[] } | null }) {
   // Các phiên bản nội dung: xoay vòng mỗi nhóm một bản
   const banNoiDung = bai ? [bai.noiDung, ...bai.bienThe].filter((x) => x.trim()) : []
   const noiDungThu = (i: number) => (banNoiDung.length ? banNoiDung[i % banNoiDung.length] : '')
@@ -184,6 +247,7 @@ export default function DanhSachNhom({ nhom, bai }: { nhom: Nhom[]; bai: { id: s
   const [chon, setChon] = useState<Set<string>>(() => new Set(bai ? nhom.filter((n) => !n.daDangBaiNay).map((n) => n.id) : []))
   const [hangDoi, setHangDoi] = useState<string[] | null>(null) // các nhóm đang đăng lần lượt
   const [viTri, setViTri] = useState(0)
+  const [moLe, setMoLe] = useState<string | null>(null) // nhóm vừa mở bằng nút "Chép & mở"
   const [, chay] = useTransition()
   const theoId = new Map(nhom.map((n) => [n.id, n]))
 
@@ -289,7 +353,8 @@ export default function DanhSachNhom({ nhom, bai }: { nhom: Nhom[]; bai: { id: s
                   Phiên bản {(viTri % banNoiDung.length) + 1}/{banNoiDung.length}
                 </span>
               )}
-              <span className="w-full text-xs text-phu">Bài đã được chép. Trong tab nhóm vừa mở: bấm vào ô viết bài → Ctrl+V → thêm ảnh → Đăng. Xong quay lại tab này và bấm <b>Enter</b> (B = bỏ qua, Esc = dừng).</span>
+              <ThanhChep key={dangDang.id} noiDung={noiDungThu(viTri)} anh={bai.anh} />
+              <span className="w-full text-xs text-phu">Phím tắt ở tab này: Enter = đã đăng → nhóm tiếp, B = bỏ qua, Esc = dừng.</span>
               <button onClick={() => tiep(true)} className="rounded-md bg-green-600 px-3 py-1.5 font-semibold text-white hover:bg-green-700">
                 ✓ Đã đăng{viTri + 1 < hangDoi!.length ? ' → nhóm tiếp' : ' (xong)'} <kbd className="ml-1 rounded bg-white/25 px-1 text-xs">Enter</kbd>
               </button>
@@ -340,7 +405,7 @@ export default function DanhSachNhom({ nhom, bai }: { nhom: Nhom[]; bai: { id: s
         {hienThi.map((n) => (
           <li
             key={n.id}
-            className={`flex items-start gap-3 rounded-xl border bg-white p-3 ${dangDang?.id === n.id ? 'border-chinh ring-2 ring-chinh/30' : 'border-slate-200'}`}
+            className={`flex flex-wrap items-start gap-3 rounded-xl border bg-white p-3 ${dangDang?.id === n.id ? 'border-chinh ring-2 ring-chinh/30' : 'border-slate-200'}`}
           >
             <input type="checkbox" checked={chon.has(n.id)} onChange={() => doiChon(n.id)} disabled={!!hangDoi} className="mt-1" aria-label={`Chọn ${n.ten}`} />
             <div className="min-w-0 flex-1">
@@ -355,7 +420,7 @@ export default function DanhSachNhom({ nhom, bai }: { nhom: Nhom[]; bai: { id: s
             </div>
             <div className="flex shrink-0 flex-col items-end gap-1 text-xs">
               {bai && !hangDoi && (
-                <button onClick={() => chepVaMo(noiDungThu(nhom.indexOf(n)), n.link)} className="rounded-md border border-chinh px-2 py-1 font-semibold text-chinh hover:bg-chinh/5">
+                <button onClick={() => (chepVaMo(noiDungThu(nhom.indexOf(n)), n.link), setMoLe(n.id))} className="rounded-md border border-chinh px-2 py-1 font-semibold text-chinh hover:bg-chinh/5">
                   Chép & mở
                 </button>
               )}
@@ -368,6 +433,11 @@ export default function DanhSachNhom({ nhom, bai }: { nhom: Nhom[]; bai: { id: s
                 Xóa
               </NutHanhDong>
             </div>
+            {bai && !hangDoi && moLe === n.id && (
+              <div className="basis-full">
+                <ThanhChep noiDung={noiDungThu(nhom.indexOf(n))} anh={bai.anh} />
+              </div>
+            )}
           </li>
         ))}
       </ul>
