@@ -139,3 +139,10 @@ export async function danhDauDaDangNhom(nhomId: string, baiVietId: string) {
   await db().from('dang_nhom').insert({ nhom_id: nhomId, bai_viet_id: baiVietId, nguoi_dung_id: nguoiDung.id })
   revalidatePath('/quan-ly/dang-nhom')
 }
+
+// Bỏ đánh dấu "đã đăng" một bài ở một nhóm (đánh dấu nhầm, hoặc muốn đăng lại)
+export async function boDanhDauNhom(nhomId: string, baiVietId: string) {
+  const { nguoiDung } = await batBuocDangNhap()
+  await db().from('dang_nhom').delete().match({ nhom_id: nhomId, bai_viet_id: baiVietId, nguoi_dung_id: nguoiDung.id })
+  revalidatePath('/quan-ly/dang-nhom')
+}

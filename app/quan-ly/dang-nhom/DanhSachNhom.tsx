@@ -1,7 +1,7 @@
 'use client'
 
 import { useActionState, useEffect, useEffectEvent, useState, useTransition } from 'react'
-import { danhDauDaDangNhom, themNhieuNhom, xoaNhom } from '../dang-bai/actions'
+import { boDanhDauNhom, danhDauDaDangNhom, themNhieuNhom, xoaNhom } from '../dang-bai/actions'
 import { NutHanhDong } from '../NutHanhDong'
 import { moCuaSoFacebook } from './moCuaSo'
 
@@ -152,8 +152,7 @@ export function FormThemNhieuNhom() {
   const giaTriGui = timDuoc.length ? daChon.map((n) => `${n.ten} | ${n.link}`).join('\n') : danhSach
 
   return (
-    <form action={gui} className="grid gap-3 rounded-xl border border-slate-200 bg-white p-4">
-      <p className="font-semibold">Lấy danh sách nhóm đã tham gia</p>
+    <form action={gui} className="grid gap-3 p-4">
       <ol className="list-decimal space-y-1 pl-5 text-sm text-phu">
         <li>
           Mở{' '}
@@ -262,7 +261,7 @@ export default function DanhSachNhom({ nhom, bai }: { nhom: Nhom[]; bai: { id: s
 
   function batDau() {
     if (!bai) return
-    const ds = nhom.filter((n) => chon.has(n.id)).map((n) => n.id)
+    const ds = nhom.filter((n) => chon.has(n.id) && !n.daDangBaiNay).map((n) => n.id)
     if (!ds.length) return
     setHangDoi(ds)
     setViTri(0)
@@ -303,140 +302,173 @@ export default function DanhSachNhom({ nhom, bai }: { nhom: Nhom[]; bai: { id: s
     return () => window.removeEventListener('keydown', khiBamPhim)
   }, [hangDoi])
 
+  // Tab: nhóm chưa đăng / đã đăng bài đang chọn. Đánh dấu đã đăng thì nhóm tự chuyển sang tab "Đã đăng".
+  const [tab, setTab] = useState<'chua' | 'da'>('chua')
+  const chuaDang = bai ? nhom.filter((n) => !n.daDangBaiNay) : nhom
+  const daDangDs = bai ? nhom.filter((n) => n.daDangBaiNay).sort((a, b) => b.daDangBaiNay!.localeCompare(a.daDangBaiNay!)) : []
+  const nhomTab = tab === 'da' && bai ? daDangDs : chuaDang
+
   // Tìm nhóm theo tên / ghi chú, không phân biệt dấu ("cong nghe" khớp "Công Nghệ")
   const [tuKhoa, setTuKhoa] = useState('')
   const tk = boDau(tuKhoa.trim())
-  const hienThi = tk ? nhom.filter((n) => boDau(`${n.ten} ${n.ghi_chu ?? ''}`).includes(tk)) : nhom
-  const daChonHet = hienThi.length > 0 && hienThi.every((n) => chon.has(n.id))
+  const hienThi = tk ? nhomTab.filter((n) => boDau(`${n.ten} ${n.ghi_chu ?? ''}`).includes(tk)) : nhomTab
+  const coTheChon = tab === 'chua' ? hienThi : []
+  const daChonHet = coTheChon.length > 0 && coTheChon.every((n) => chon.has(n.id))
   const chonKetQua = (bat: boolean) =>
     setChon((c) => {
       const m = new Set(c)
-      for (const n of hienThi) {
+      for (const n of coTheChon) {
         if (bat) m.add(n.id)
         else m.delete(n.id)
       }
       return m
     })
+  const soDaChon = chuaDang.filter((n) => chon.has(n.id)).length
+
+  if (!nhom.length) {
+    return (
+      <p className="mt-3 rounded-xl border border-dashed border-slate-300 bg-white p-4 text-sm text-phu">
+        <b className="text-chu">Chưa có nhóm nào.</b> Bấm &quot;＋ Thêm nhóm từ Facebook&quot; ở cột trái để lấy danh sách nhóm bạn đã tham gia.
+      </p>
+    )
+  }
 
   return (
     <div>
-      {nhom.length > 0 && !hangDoi && (
-        <div className="mt-3 flex flex-wrap items-center gap-2">
-          <input
-            type="search"
-            value={tuKhoa}
-            onChange={(e) => setTuKhoa(e.target.value)}
-            placeholder="🔍 Tìm nhóm theo tên, ví dụ: công nghệ"
-            className="min-w-0 flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-chinh focus:outline-none"
-          />
-          {/* Gợi ý nhanh: các từ hay gặp trong tên nhóm */}
-          {tuGoiY(nhom).map((t) => (
-            <button
-              key={t}
-              type="button"
-              onClick={() => setTuKhoa(tuKhoa === t ? '' : t)}
-              className={`rounded-full px-2.5 py-1 text-xs ${tuKhoa === t ? 'bg-chinh text-white' : 'bg-slate-100 text-phu hover:bg-slate-200'}`}
-            >
-              {t}
+      {/* Đang đăng lần lượt */}
+      {bai && dangDang && (
+        <div className="sticky top-0 z-10 mt-3 rounded-xl border border-chinh/30 bg-blue-50 p-3 text-sm">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="font-semibold">
+              {viTri + 1}/{hangDoi!.length} · {dangDang.ten}
+            </span>
+            {banNoiDung.length > 1 && <span className="rounded bg-white px-1.5 text-xs text-phu">Bản {(viTri % banNoiDung.length) + 1}</span>}
+            <button onClick={() => setHangDoi(null)} className="ml-auto text-xs text-phu hover:underline">
+              Dừng (Esc)
             </button>
-          ))}
-        </div>
-      )}
-      {bai && nhom.length > 0 && (
-        <div className="sticky top-0 z-10 mt-3 rounded-xl border border-chinh/30 bg-blue-50 p-3">
-          {dangDang ? (
-            <div className="flex flex-wrap items-center gap-2 text-sm">
-              <span className="font-semibold">
-                Đang đăng ({viTri + 1}/{hangDoi!.length}): {dangDang.ten}
-              </span>
-              {banNoiDung.length > 1 && (
-                <span className="rounded bg-white px-1.5 text-xs text-phu">
-                  Phiên bản {(viTri % banNoiDung.length) + 1}/{banNoiDung.length}
-                </span>
-              )}
-              <ThanhChep key={dangDang.id} noiDung={noiDungThu(viTri)} anh={bai.anh} />
-              <span className="w-full text-xs text-phu">Phím tắt ở tab này: Enter = đã đăng → nhóm tiếp, B = bỏ qua, Esc = dừng.</span>
-              <button onClick={() => tiep(true)} className="rounded-md bg-green-600 px-3 py-1.5 font-semibold text-white hover:bg-green-700">
-                ✓ Đã đăng{viTri + 1 < hangDoi!.length ? ' → nhóm tiếp' : ' (xong)'} <kbd className="ml-1 rounded bg-white/25 px-1 text-xs">Enter</kbd>
-              </button>
-              <button onClick={() => tiep(false)} className="rounded-md border border-slate-300 bg-white px-3 py-1.5 hover:bg-slate-50">
-                Bỏ qua
-              </button>
-              <button onClick={() => chepVaMo(noiDungThu(viTri), dangDang.link)} className="rounded-md border border-slate-300 bg-white px-3 py-1.5 hover:bg-slate-50">
-                Chép & mở lại
-              </button>
-              <button onClick={() => setHangDoi(null)} className="ml-auto text-phu hover:underline">
-                Dừng
-              </button>
-            </div>
-          ) : (
-            <div className="flex flex-wrap items-center gap-3 text-sm">
-              <label className="flex items-center gap-1.5">
-                <input type="checkbox" checked={daChonHet} onChange={(e) => chonKetQua(e.target.checked)} />
-                {tk ? `Chọn tất cả ${hienThi.length} kết quả` : 'Chọn tất cả'}
-              </label>
-              <button onClick={() => setChon(new Set(hienThi.filter((n) => !n.daDangBaiNay).map((n) => n.id)))} className="text-chinh hover:underline">
-                Chỉ chọn nhóm chưa đăng bài này
-              </button>
-              {chon.size > 0 && (
-                <button onClick={() => setChon(new Set())} className="text-phu hover:underline">
-                  Bỏ chọn hết
-                </button>
-              )}
-              <button
-                onClick={batDau}
-                disabled={!chon.size}
-                className="ml-auto rounded-md bg-chinh px-3 py-1.5 font-semibold text-white hover:bg-chinh-dam disabled:opacity-50"
-              >
-                Đăng lần lượt {chon.size} nhóm đã chọn
-              </button>
-            </div>
-          )}
+          </div>
+          <div className="mt-2">
+            <ThanhChep key={dangDang.id} noiDung={noiDungThu(viTri)} anh={bai.anh} />
+          </div>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <button onClick={() => tiep(true)} className="flex-1 rounded-md bg-green-600 px-3 py-2 font-semibold text-white hover:bg-green-700">
+              ✓ Đã đăng{viTri + 1 < hangDoi!.length ? ' → nhóm tiếp' : ' (xong)'} <kbd className="ml-1 rounded bg-white/25 px-1 text-xs">Enter</kbd>
+            </button>
+            <button onClick={() => tiep(false)} className="rounded-md border border-slate-300 bg-white px-3 py-2 hover:bg-slate-50">
+              Bỏ qua (B)
+            </button>
+            <button onClick={() => chepVaMo(noiDungThu(viTri), dangDang.link)} className="rounded-md border border-slate-300 bg-white px-3 py-2 hover:bg-slate-50">
+              Mở lại
+            </button>
+          </div>
         </div>
       )}
 
-      <ul className="mt-3 space-y-2">
-        {!nhom.length && (
-          <li className="rounded-xl border border-dashed border-slate-300 bg-white p-4 text-sm text-phu">
-            <b className="text-chu">Chưa có nhóm nào.</b> Facebook không cho phần mềm tự đọc danh sách nhóm bạn đã tham gia, nên cần dán link nhóm một lần ở ô
-            “Thêm nhóm đã tham gia”. Sau đó các nhóm hiện ở đây kèm ô tích chọn và ô tìm theo tên (ví dụ “công nghệ”).
+      {!hangDoi && (
+        <>
+          {bai && (
+            <div className="mt-3 flex gap-1 rounded-lg bg-slate-100 p-1 text-sm font-medium">
+              {(
+                [
+                  ['chua', `Chưa đăng (${chuaDang.length})`],
+                  ['da', `Đã đăng (${daDangDs.length})`],
+                ] as const
+              ).map(([ma, nhan]) => (
+                <button
+                  key={ma}
+                  onClick={() => setTab(ma)}
+                  className={`flex-1 rounded-md px-3 py-1.5 ${tab === ma ? 'bg-white text-chu shadow-sm' : 'text-phu hover:text-chu'}`}
+                >
+                  {nhan}
+                </button>
+              ))}
+            </div>
+          )}
+
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <input
+              type="search"
+              value={tuKhoa}
+              onChange={(e) => setTuKhoa(e.target.value)}
+              placeholder="🔍 Tìm nhóm, ví dụ: công nghệ"
+              className="min-w-0 flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-chinh focus:outline-none"
+            />
+            {tuGoiY(nhomTab).map((t) => (
+              <button
+                key={t}
+                type="button"
+                onClick={() => setTuKhoa(tuKhoa === t ? '' : t)}
+                className={`rounded-full px-2.5 py-1 text-xs ${tuKhoa === t ? 'bg-chinh text-white' : 'bg-slate-100 text-phu hover:bg-slate-200'}`}
+              >
+                {t}
+              </button>
+            ))}
+          </div>
+
+          {bai && tab === 'chua' && chuaDang.length > 0 && (
+            <div className="sticky top-0 z-10 mt-3 flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-2 pl-3 text-sm shadow-sm">
+              <label className="flex items-center gap-2">
+                <input type="checkbox" checked={daChonHet} onChange={(e) => chonKetQua(e.target.checked)} />
+                {tk ? `Chọn ${hienThi.length} kết quả` : 'Chọn tất cả'}
+              </label>
+              <button
+                onClick={batDau}
+                disabled={!soDaChon}
+                className="ml-auto rounded-md bg-chinh px-4 py-2 font-semibold text-white hover:bg-chinh-dam disabled:opacity-50"
+              >
+                ▶ Đăng lần lượt {soDaChon} nhóm
+              </button>
+            </div>
+          )}
+        </>
+      )}
+
+      <ul className="mt-2 divide-y divide-slate-100 overflow-hidden rounded-xl border border-slate-200 bg-white">
+        {!hienThi.length && (
+          <li className="p-4 text-sm text-phu">
+            {tk ? `Không có nhóm nào có chữ "${tuKhoa}".` : tab === 'da' ? 'Chưa đăng bài này vào nhóm nào.' : '🎉 Đã đăng bài này vào tất cả các nhóm.'}
           </li>
         )}
-        {nhom.length > 0 && !hienThi.length && <li className="text-sm text-phu">Không có nhóm nào có chữ “{tuKhoa}”.</li>}
         {hienThi.map((n) => (
-          <li
-            key={n.id}
-            className={`flex flex-wrap items-start gap-3 rounded-xl border bg-white p-3 ${dangDang?.id === n.id ? 'border-chinh ring-2 ring-chinh/30' : 'border-slate-200'}`}
-          >
-            <input type="checkbox" checked={chon.has(n.id)} onChange={() => doiChon(n.id)} disabled={!!hangDoi} className="mt-1" aria-label={`Chọn ${n.ten}`} />
+          <li key={n.id} className={`group flex flex-wrap items-center gap-3 px-3 py-2.5 ${dangDang?.id === n.id ? 'bg-blue-50' : ''}`}>
+            {tab === 'chua' && bai && (
+              <input type="checkbox" checked={chon.has(n.id)} onChange={() => doiChon(n.id)} disabled={!!hangDoi} aria-label={`Chọn ${n.ten}`} />
+            )}
             <div className="min-w-0 flex-1">
-              <a href={n.link} target="_blank" rel="noreferrer" className="font-semibold hover:underline">
+              <a href={n.link} target="_blank" rel="noreferrer" className="block truncate font-medium hover:underline">
                 {n.ten}
               </a>
-              {n.ghi_chu && <p className="text-xs text-phu">{n.ghi_chu}</p>}
-              <p className="mt-0.5 text-xs text-phu">
-                {n.daDangBaiNay ? <span className="font-semibold text-green-700">✓ Đã đăng bài này {ngay(n.daDangBaiNay)}</span> : 'Chưa đăng bài này'}
-                {n.lanCuoi && ` · Gần nhất ${ngay(n.lanCuoi)}`}
-              </p>
+              {tab === 'da' && n.daDangBaiNay && <p className="text-xs text-green-700">✓ Đã đăng {ngay(n.daDangBaiNay)}</p>}
             </div>
-            <div className="flex shrink-0 flex-col items-end gap-1 text-xs">
-              {bai && !hangDoi && (
-                <button onClick={() => (chepVaMo(noiDungThu(nhom.indexOf(n)), n.link), setMoLe(n.id))} className="rounded-md border border-chinh px-2 py-1 font-semibold text-chinh hover:bg-chinh/5">
-                  Chép & mở
-                </button>
-              )}
-              {bai && !hangDoi && (
-                <button onClick={() => chay(() => danhDauDaDangNhom(n.id, bai.id))} className="text-green-700 hover:underline">
-                  ✓ Đánh dấu đã đăng
-                </button>
-              )}
-              <NutHanhDong chay={xoaNhom.bind(null, n.id)} xacNhan={`Xóa nhóm ${n.ten}?`} className="text-red-600 hover:underline">
-                Xóa
-              </NutHanhDong>
-            </div>
-            {bai && !hangDoi && moLe === n.id && (
-              <div className="basis-full">
+            {tab === 'chua' && bai && !hangDoi && (
+              <button
+                onClick={() => (chepVaMo(noiDungThu(nhom.indexOf(n)), n.link), setMoLe(n.id))}
+                className="rounded-md border border-chinh px-3 py-1 text-xs font-semibold text-chinh hover:bg-chinh/5"
+              >
+                Đăng
+              </button>
+            )}
+            {tab === 'da' && bai && (
+              <button onClick={() => chay(() => boDanhDauNhom(n.id, bai.id))} className="text-xs text-phu hover:underline">
+                Bỏ đánh dấu
+              </button>
+            )}
+            <NutHanhDong
+              chay={xoaNhom.bind(null, n.id)}
+              xacNhan={`Xóa nhóm ${n.ten} khỏi danh sách?`}
+              className="text-xs text-red-500 opacity-0 transition group-hover:opacity-100 focus:opacity-100"
+            >
+              ✕
+            </NutHanhDong>
+            {bai && !hangDoi && moLe === n.id && tab === 'chua' && (
+              <div className="basis-full space-y-2 pb-1">
                 <ThanhChep noiDung={noiDungThu(nhom.indexOf(n))} anh={bai.anh} />
+                <button
+                  onClick={() => (chay(() => danhDauDaDangNhom(n.id, bai.id)), setMoLe(null))}
+                  className="w-full rounded-md bg-green-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-green-700"
+                >
+                  ✓ Đã đăng nhóm này
+                </button>
               </div>
             )}
           </li>

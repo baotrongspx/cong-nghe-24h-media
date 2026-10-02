@@ -3,6 +3,7 @@ import { db } from '@/lib/db'
 import { daLenFacebook, linkChiaSe } from '@/lib/linkFacebook'
 import { batBuocDangNhap } from '@/lib/phien'
 import DanhSachNhom, { FormThemNhieuNhom, type Nhom } from './DanhSachNhom'
+import ChonBai from './ChonBai'
 import NutChiaSe from './NutChiaSe'
 
 const NGUONG_MOI_NGAY = 15
@@ -36,43 +37,35 @@ export default async function DangNhom({ searchParams }: PageProps<'/quan-ly/dan
   return (
     <div className="h-full overflow-y-auto">
       <div className="mx-auto grid max-w-6xl gap-8 px-4 py-8 lg:grid-cols-[2fr_3fr]">
-        <section className="min-w-0 space-y-5">
+        <section className="min-w-0 space-y-4">
           <div>
-            <h1 className="text-2xl font-bold">Trợ lý đăng nhóm</h1>
-            <p className="mt-1 text-sm text-phu">
-              Facebook không cho phần mềm tự đăng vào nhóm. Trợ lý chép sẵn nội dung và mở đúng nhóm, bạn chỉ cần dán (Ctrl+V), kéo ảnh vào và bấm Đăng
-              trên Facebook. Nick của bạn an toàn vì người thật thao tác.
-            </p>
+            <h1 className="text-2xl font-bold">Đăng nhóm</h1>
+            <p className="mt-1 text-sm text-phu">Phần mềm chép sẵn bài và mở đúng nhóm, bạn dán (Ctrl+V) rồi bấm Đăng. Nick an toàn vì người thật thao tác.</p>
           </div>
 
           <div className="rounded-xl border border-slate-200 bg-white p-4">
-            <p className="font-semibold">Chọn bài để đăng</p>
+            <p className="mb-2 text-sm font-semibold">Bài sẽ đăng</p>
             {bai.length ? (
-              <ul className="mt-2 space-y-1">
-                {bai.map((b) => (
-                  <li key={b.id}>
-                    <Link
-                      href={`/quan-ly/dang-nhom?bai=${b.id}`}
-                      className={`block truncate rounded-md px-2 py-1.5 text-sm ${b.id === dangChon?.id ? 'bg-chinh/10 font-semibold text-chinh' : 'hover:bg-slate-50'}`}
-                    >
-                      {b.noi_dung.split('\n')[0] || '(chỉ có ảnh)'}
-                    </Link>
-                  </li>
-                ))}
-              </ul>
+              <ChonBai dangChon={dangChon?.id} bai={bai.map((b) => ({ id: b.id, tieuDe: (b.noi_dung.split('\n')[0] || '(chỉ có ảnh)').slice(0, 90) }))} />
             ) : (
-              <p className="mt-2 text-sm text-phu">
+              <p className="text-sm text-phu">
                 Chưa có bài. <Link href="/quan-ly/dang-bai" className="text-chinh hover:underline">Soạn bài</Link> (không cần chọn Page) rồi quay lại đây.
+              </p>
+            )}
+            {dangChon && (dangChon.anh.length > 0 || dangChon.bien_the.length > 0) && (
+              <p className="mt-2 text-xs text-phu">
+                {dangChon.anh.length > 0 && `${dangChon.anh.length} ảnh`}
+                {dangChon.anh.length > 0 && dangChon.bien_the.length > 0 && ' · '}
+                {dangChon.bien_the.length > 0 && `${dangChon.bien_the.length + 1} phiên bản nội dung`}
               </p>
             )}
           </div>
 
           {baiTrenPage.length > 0 && (
             <div className="rounded-xl border-2 border-chinh/30 bg-blue-50 p-4">
-              <p className="font-semibold">⚡ Cách nhanh: chia sẻ bài Fanpage vào nhóm</p>
+              <p className="font-semibold">⚡ Nhanh nhất: chia sẻ bài Fanpage</p>
               <p className="mt-1 text-xs text-phu">
-                Bấm nút → trong hộp thoại Facebook chọn <b>Chia sẻ lên nhóm</b> → chọn nhóm → <b>Đăng</b>. Ảnh và nội dung tự đi kèm, không cần chép dán. Nên chia
-                sẻ khoảng 10–15 nhóm mỗi đợt.
+                Bấm nút → <b>Chia sẻ lên nhóm</b> → chọn nhóm → <b>Đăng</b>. Ảnh và nội dung tự đi kèm.
               </p>
               <div className="mt-2 flex flex-wrap gap-2">
                 {baiTrenPage.map((d) => (
@@ -84,26 +77,20 @@ export default async function DangNhom({ searchParams }: PageProps<'/quan-ly/dan
             </div>
           )}
 
-          {dangChon && dangChon.anh.length > 0 && (
-            <div className="rounded-xl border border-slate-200 bg-white p-4">
-              <p className="font-semibold">Ảnh của bài</p>
-              <p className="text-xs text-phu">Kéo ảnh thả vào ô đăng bài của Facebook, hoặc bấm để mở ảnh rồi lưu về máy.</p>
-              <div className="mt-2 flex flex-wrap gap-2">
-                {dangChon.anh.map((u) => (
-                  <a key={u} href={u} target="_blank" rel="noreferrer">
-                    <img src={u} alt="" className="h-20 w-20 rounded-lg object-cover" />
-                  </a>
-                ))}
-              </div>
+          <details open={!nhom.length} className="group rounded-xl border border-slate-200 bg-white">
+            <summary className="flex cursor-pointer list-none items-center justify-between p-4 text-sm font-semibold">
+              ＋ Thêm nhóm từ Facebook
+              <span className="text-phu transition group-open:rotate-180">⌄</span>
+            </summary>
+            <div className="border-t border-slate-100">
+              <FormThemNhieuNhom />
             </div>
-          )}
-
-          <FormThemNhieuNhom />
+          </details>
         </section>
 
         <section className="min-w-0">
           <div className="flex flex-wrap items-baseline justify-between gap-2">
-            <h2 className="text-xl font-bold">Nhóm của bạn ({nhom.length})</h2>
+            <h2 className="text-xl font-bold">Nhóm ({nhom.length})</h2>
             <p className={`text-sm ${(homNay ?? 0) >= NGUONG_MOI_NGAY ? 'font-semibold text-red-600' : 'text-phu'}`}>Hôm nay đã đăng {homNay ?? 0} nhóm</p>
           </div>
           {(homNay ?? 0) >= NGUONG_MOI_NGAY && (
