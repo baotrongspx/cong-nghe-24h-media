@@ -1,7 +1,9 @@
 import Link from 'next/link'
 import { after } from 'next/server'
 import { db } from '@/lib/db'
-import { batBuocDangNhap, locHoiThoai } from '@/lib/phien'
+import { COT_DON, type DonHang, type SanPham } from '@/lib/donHang'
+import { batBuocDangNhap, locDonHang, locHoiThoai } from '@/lib/phien'
+import DonHangChat from './DonHangChat'
 import { ChonPhuTrach, ChonThe, KhungTraLoi, LamMoi, NutAnHien, NutChuaDoc, SoDienThoai } from './HopThuClient'
 
 type HoiThoai = {
@@ -90,6 +92,13 @@ export default async function HopThu({ searchParams }: PageProps<'/quan-ly'>) {
   const layTin = h
     ? db().from('tin').select('id, chieu, noi_dung, dinh_kem, da_an, tao_luc, nguoi_gui_id').eq('hoi_thoai_id', h).order('tao_luc', { ascending: false }).limit(200).then((r) => r.data)
     : null
+  // Đơn hàng của hội thoại đang mở + tên/giá sản phẩm đã bán gần đây (gợi ý khi tạo đơn)
+  const layDon = h
+    ? Promise.all([
+        db().from('don_hang').select(COT_DON).eq('hoi_thoai_id', h).or(locDonHang(phien)).order('tao_luc', { ascending: false }).then((r) => (r.data ?? []) as DonHang[]),
+        db().from('don_hang').select('san_pham').or(locDonHang(phien)).order('tao_luc', { ascending: false }).limit(200).then((r) => (r.data ?? []) as { san_pham: SanPham[] }[]),
+      ])
+    : null
   const [{ data: dsHt }, { data: dsTrang }, { data: dsThe }, { data: dsMau }, { data: dsThanhVien }] = await Promise.all([
     truyVan,
     db().from('fb_trang').select('id, ten, anh').in('id', trangIds),
@@ -122,6 +131,11 @@ export default async function HopThu({ searchParams }: PageProps<'/quan-ly'>) {
     const id = dangMo.id
     if (dangMo.chua_doc) after(() => db().from('hoi_thoai').update({ chua_doc: 0 }).eq('id', id))
   }
+  const [donCuaKhach, donGanDay] = (dangMo && layDon ? await layDon : null) ?? [[], []]
+  // Mỗi tên sản phẩm lấy giá của lần bán gần nhất
+  const goiYSanPham = [
+    ...new Map(donGanDay.flatMap((d) => d.san_pham).reverse().map((x) => [x.ten.toLowerCase(), { ten: x.ten, gia: x.gia }])).values(),
+  ].slice(0, 300)
 
   return (
     <div className="flex h-full">
@@ -241,6 +255,17 @@ export default async function HopThu({ searchParams }: PageProps<'/quan-ly'>) {
               <SoDienThoai hoiThoaiId={dangMo.id} giaTri={dangMo.so_dien_thoai ?? ''} />
               <ChonPhuTrach hoiThoaiId={dangMo.id} dangChon={dangMo.nguoi_phu_trach} nguoi={nguoiCuaTrang(dangMo.trang_id)} toi={nguoiDung.id} />
               <ChonThe hoiThoaiId={dangMo.id} dangChon={dangMo.the} tatCa={the} />
+              <DonHangChat
+                key={dangMo.id}
+                hoiThoaiId={dangMo.id}
+                macDinh={{
+                  khach_ten: donCuaKhach[0]?.khach_ten || dangMo.khach_ten || '',
+                  so_dien_thoai: dangMo.so_dien_thoai || donCuaKhach[0]?.so_dien_thoai || '',
+                  dia_chi: donCuaKhach[0]?.dia_chi ?? '',
+                }}
+                don={donCuaKhach}
+                goiYSanPham={goiYSanPham}
+              />
               <NutChuaDoc hoiThoaiId={dangMo.id} />
             </div>
           </div>

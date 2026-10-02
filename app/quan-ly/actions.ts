@@ -6,7 +6,8 @@ import { db } from '@/lib/db'
 import { LoiFacebook, anBinhLuan, guiTinNhan, nhanRiengBinhLuan, traLoiBinhLuan } from '@/lib/facebook'
 import { COT_TRANG, luuTin, type Trang } from '@/lib/hopThu'
 import { goiHieuLuc, timGoi } from '@/lib/goiCuoc'
-import { batBuocDangNhap, batBuocQuanTri, locHoiThoai } from '@/lib/phien'
+import { COT_DON, noiDungXacNhan, type DonHang } from '@/lib/donHang'
+import { batBuocDangNhap, batBuocQuanTri, locDonHang, locHoiThoai } from '@/lib/phien'
 
 export type KetQua = { ok: boolean; thongBao?: string }
 
@@ -39,32 +40,52 @@ export async function traLoi(_truoc: KetQua | null, form: FormData): Promise<Ket
   const cach = String(form.get('cach') ?? 'cong_khai') // cong_khai | rieng (chỉ với bình luận)
   if (!noiDung) return { ok: false, thongBao: 'Chưa nhập nội dung' }
   try {
-    const ht = await hoiThoaiCuaToi(String(form.get('hoi_thoai_id')))
-    const token = ht.trang.access_token
-    if (ht.loai === 'tin_nhan') {
-      const r = await guiTinNhan(token, ht.khach_id, noiDung)
-      await luuTin({ trang: ht.trang, loai: 'tin_nhan', khachId: ht.khach_id, fbId: r.message_id, chieu: 'ra', noiDung, nguoiGuiId: ht.toi })
-    } else {
-      // Trả lời vào bình luận mới nhất của khách trong bài này
-      const { data: goc } = await db()
-        .from('tin')
-        .select('fb_id')
-        .eq('hoi_thoai_id', ht.id)
-        .eq('chieu', 'vao')
-        .order('tao_luc', { ascending: false })
-        .limit(1)
-        .maybeSingle()
-      if (!goc?.fb_id) return { ok: false, thongBao: 'Không có bình luận để trả lời' }
-      if (cach === 'rieng') {
-        // Id người bình luận khác PSID Messenger, nên ghi lại ngay trong hội thoại bình luận
-        const r = await nhanRiengBinhLuan(token, goc.fb_id, noiDung)
-        await luuTin({ trang: ht.trang, loai: 'binh_luan', khachId: ht.khach_id, baiVietId: ht.bai_viet_id, fbId: r.message_id, chieu: 'ra', noiDung: `[Nhắn riêng] ${noiDung}`, nguoiGuiId: ht.toi })
-      } else {
-        const r = await traLoiBinhLuan(token, goc.fb_id, noiDung)
-        await luuTin({ trang: ht.trang, loai: 'binh_luan', khachId: ht.khach_id, baiVietId: ht.bai_viet_id, fbId: r.id, chieu: 'ra', noiDung, nguoiGuiId: ht.toi })
-      }
-    }
+    await guiChoKhach(await hoiThoaiCuaToi(String(form.get('hoi_thoai_id'))), noiDung, cach)
     revalidatePath('/quan-ly')
+    return { ok: true }
+  } catch (e) {
+    return { ok: false, thongBao: loiDeHieu(e) }
+  }
+}
+
+// Gửi tin cho khách: nhắn Messenger, hoặc trả lời bình luận (công khai / nhắn riêng)
+async function guiChoKhach(ht: Awaited<ReturnType<typeof hoiThoaiCuaToi>>, noiDung: string, cach: string) {
+  const token = ht.trang.access_token
+  if (ht.loai === 'tin_nhan') {
+    const r = await guiTinNhan(token, ht.khach_id, noiDung)
+    await luuTin({ trang: ht.trang, loai: 'tin_nhan', khachId: ht.khach_id, fbId: r.message_id, chieu: 'ra', noiDung, nguoiGuiId: ht.toi })
+    return
+  }
+  // Trả lời vào bình luận mới nhất của khách trong bài này
+  const { data: goc } = await db()
+    .from('tin')
+    .select('fb_id')
+    .eq('hoi_thoai_id', ht.id)
+    .eq('chieu', 'vao')
+    .order('tao_luc', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  if (!goc?.fb_id) throw new Error('Không có bình luận để trả lời')
+  if (cach === 'rieng') {
+    // Id người bình luận khác PSID Messenger, nên ghi lại ngay trong hội thoại bình luận
+    const r = await nhanRiengBinhLuan(token, goc.fb_id, noiDung)
+    await luuTin({ trang: ht.trang, loai: 'binh_luan', khachId: ht.khach_id, baiVietId: ht.bai_viet_id, fbId: r.message_id, chieu: 'ra', noiDung: `[Nhắn riêng] ${noiDung}`, nguoiGuiId: ht.toi })
+  } else {
+    const r = await traLoiBinhLuan(token, goc.fb_id, noiDung)
+    await luuTin({ trang: ht.trang, loai: 'binh_luan', khachId: ht.khach_id, baiVietId: ht.bai_viet_id, fbId: r.id, chieu: 'ra', noiDung, nguoiGuiId: ht.toi })
+  }
+}
+
+// Gửi tin xác nhận đơn cho khách. Khách bình luận thì nhắn riêng (không lộ địa chỉ, SĐT dưới bài viết).
+export async function guiXacNhanDon(donId: string): Promise<KetQua> {
+  try {
+    const phien = await batBuocDangNhap()
+    const { data: don } = await db().from('don_hang').select(COT_DON).eq('id', donId).or(locDonHang(phien)).maybeSingle<DonHang>()
+    if (!don?.hoi_thoai_id) return { ok: false, thongBao: 'Đơn không gắn với hội thoại nào' }
+    await guiChoKhach(await hoiThoaiCuaToi(don.hoi_thoai_id), noiDungXacNhan(don), 'rieng')
+    if (don.trang_thai === 'moi') await db().from('don_hang').update({ trang_thai: 'xac_nhan', cap_nhat_luc: new Date().toISOString() }).eq('id', donId)
+    revalidatePath('/quan-ly')
+    revalidatePath('/quan-ly/don-hang')
     return { ok: true }
   } catch (e) {
     return { ok: false, thongBao: loiDeHieu(e) }

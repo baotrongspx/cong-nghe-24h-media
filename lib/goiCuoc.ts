@@ -24,7 +24,7 @@ export const GOI_CUOC: GoiCuoc[] = [
     soTrang: 3,
     soNhanVien: 2,
     danhCho: 'Shop nhỏ mới bắt đầu bán trên Facebook',
-    tinhNang: ['Tối đa 3 Fanpage, 2 nhân viên', 'Hộp thư chung tin nhắn + bình luận', 'Tự ẩn bình luận có SĐT', 'Mẫu câu, gắn thẻ khách', 'Tự trả lời theo từ khóa', 'Chia hội thoại cho nhân viên'],
+    tinhNang: ['Tối đa 3 Fanpage, 2 nhân viên', 'Hộp thư chung tin nhắn + bình luận', 'Tự ẩn bình luận có SĐT', 'Mẫu câu, gắn thẻ khách', 'Tự trả lời theo từ khóa', 'Chia hội thoại cho nhân viên', 'Tạo đơn hàng trong khung chat'],
   },
   {
     ma: 'co_ban',

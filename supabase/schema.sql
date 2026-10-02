@@ -178,3 +178,26 @@ alter table dang_nhom enable row level security;
 
 -- Các phiên bản nội dung khác của bài (trợ lý đăng nhóm xoay vòng để đỡ bị coi là spam)
 alter table bai_viet add column if not exists bien_the text[] not null default '{}';
+
+-- ============ Đơn hàng (tạo ngay trong khung chat) ============
+create table if not exists don_hang (
+  id uuid primary key default gen_random_uuid(),
+  ma bigint generated always as identity (start with 1001), -- số đơn hiển thị: #1001…
+  trang_id text not null references fb_trang(id) on delete cascade,
+  hoi_thoai_id uuid references hoi_thoai(id) on delete set null,
+  nguoi_tao_id text references nguoi_dung(id) on delete set null,
+  khach_ten text not null default '',
+  so_dien_thoai text not null default '',
+  dia_chi text not null default '',
+  san_pham jsonb not null default '[]',          -- [{ ten, sl, gia }]
+  phi_ship bigint not null default 0,
+  giam_gia bigint not null default 0,
+  tong bigint not null default 0,                   -- tiền hàng + ship − giảm giá
+  ghi_chu text not null default '',
+  trang_thai text not null default 'moi' check (trang_thai in ('moi', 'xac_nhan', 'dang_giao', 'da_giao', 'hoan', 'huy')),
+  tao_luc timestamptz not null default now(),
+  cap_nhat_luc timestamptz not null default now()
+);
+create index if not exists don_hang_trang_tao on don_hang (trang_id, tao_luc desc);
+create index if not exists don_hang_hoi_thoai on don_hang (hoi_thoai_id);
+alter table don_hang enable row level security;

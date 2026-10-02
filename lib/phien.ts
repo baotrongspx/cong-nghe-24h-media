@@ -89,6 +89,15 @@ export function locHoiThoai(p: { trangIds: string[]; chiCuaMinh: string[]; nguoi
   return phan.length ? phan.join(',') : 'trang_id.eq.__khong_co__'
 }
 
+// Bộ lọc đơn hàng mình được xem: như hội thoại, nhân viên "chỉ xem của mình" chỉ thấy đơn mình tạo
+export function locDonHang(p: { trangIds: string[]; chiCuaMinh: string[]; nguoiDung: { id: string } }) {
+  const tuDo = p.trangIds.filter((t) => !p.chiCuaMinh.includes(t))
+  const phan: string[] = []
+  if (tuDo.length) phan.push(`trang_id.in.(${tuDo.join(',')})`)
+  if (p.chiCuaMinh.length) phan.push(`and(trang_id.in.(${p.chiCuaMinh.join(',')}),nguoi_tao_id.eq.${p.nguoiDung.id})`)
+  return phan.length ? phan.join(',') : 'trang_id.eq.__khong_co__'
+}
+
 export async function batBuocQuanTri() {
   const kq = await batBuocDangNhap()
   if (!kq.nguoiDung.la_quan_tri) redirect('/quan-ly')
