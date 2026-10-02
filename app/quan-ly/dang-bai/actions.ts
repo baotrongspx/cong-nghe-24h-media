@@ -61,7 +61,13 @@ export async function taoBaiViet(_truoc: KetQua | null, form: FormData): Promise
         .from('dang_trang')
         .insert({ bai_viet_id: bai.id, trang_id: t.id, hen_luc: henLuc?.toISOString() ?? null, fb_post_id: r.id, trang_thai: henLuc ? 'da_hen' : 'da_dang' })
     } catch (e) {
-      const thongBao = e instanceof LoiFacebook ? e.message : String(e)
+      // #200/#10: token của Page chưa có quyền đăng bài (pages_manage_posts) → cần đăng nhập lại để cấp quyền
+      const thongBao =
+        e instanceof LoiFacebook && (e.ma === 200 || e.ma === 10)
+          ? 'Chưa được cấp quyền đăng bài lên Page này — hãy đăng xuất, đăng nhập lại Facebook và bật quyền cho Page.'
+          : e instanceof LoiFacebook
+            ? e.message
+            : String(e)
       loi.push(`${t.ten}: ${thongBao}`)
       await db().from('dang_trang').insert({ bai_viet_id: bai.id, trang_id: t.id, hen_luc: henLuc?.toISOString() ?? null, trang_thai: 'loi', loi: thongBao })
     }

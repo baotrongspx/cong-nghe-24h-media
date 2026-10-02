@@ -69,6 +69,8 @@ export function urlDangNhap(chuyenVe: string, state: string) {
   u.searchParams.set('state', state)
   u.searchParams.set('scope', QUYEN.join(','))
   u.searchParams.set('response_type', 'code')
+  // Hỏi lại các quyền còn thiếu (quyền mới thêm, hoặc lần trước người dùng bỏ chọn)
+  u.searchParams.set('auth_type', 'rerequest')
   return u.toString()
 }
 
