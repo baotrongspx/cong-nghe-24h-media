@@ -9,11 +9,13 @@ export default function SoanBai({ trang }: { trang: { id: string; ten: string }[
   const [dangTai, setDangTai] = useState(0)
   const [loiAnh, setLoiAnh] = useState('')
   const [cheDo, setCheDo] = useState<'ngay' | 'hen'>('ngay')
+  const [bienThe, setBienThe] = useState<string[]>([])
   const [kq, gui, dangGui] = useActionState(async (truoc: KetQua | null, f: FormData) => {
     const r = await taoBaiViet(truoc, f)
     if (r.ok) {
       setNoiDung('')
       setAnh([])
+      setBienThe([])
     }
     return r
   }, null)
@@ -50,6 +52,31 @@ export default function SoanBai({ trang }: { trang: { id: string; ten: string }[
         placeholder="Nội dung bài viết…"
         className="rounded-lg border border-slate-300 px-3 py-2 text-[15px] focus:border-chinh focus:outline-none"
       />
+      {bienThe.map((b, i) => (
+        <div key={i} className="relative">
+          <textarea
+            name="bien_the"
+            value={b}
+            onChange={(e) => setBienThe((ds) => ds.map((x, j) => (j === i ? e.target.value : x)))}
+            rows={3}
+            placeholder={`Phiên bản ${i + 2}: viết lại cùng ý, khác câu chữ…`}
+            className="w-full rounded-lg border border-dashed border-slate-300 px-3 py-2 text-sm focus:border-chinh focus:outline-none"
+          />
+          <button
+            type="button"
+            onClick={() => setBienThe((ds) => ds.filter((_, j) => j !== i))}
+            className="absolute right-2 top-2 text-xs text-phu hover:text-red-600"
+            aria-label="Bỏ phiên bản"
+          >
+            ✕
+          </button>
+        </div>
+      ))}
+      {bienThe.length < 4 && (
+        <button type="button" onClick={() => setBienThe((ds) => [...ds, ''])} className="justify-self-start text-sm text-chinh hover:underline">
+          + Thêm phiên bản nội dung khác (dùng khi đăng nhóm, mỗi nhóm một bản để đỡ bị coi là spam)
+        </button>
+      )}
       {anh.map((u) => (
         <input key={u} type="hidden" name="anh" value={u} />
       ))}

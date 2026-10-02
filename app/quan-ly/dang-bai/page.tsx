@@ -9,6 +9,7 @@ type Bai = {
   id: string
   noi_dung: string
   anh: string[]
+  bien_the: string[]
   tao_luc: string
   dang_trang: { id: string; trang_id: string; hen_luc: string | null; fb_post_id: string | null; trang_thai: string; loi: string | null }[]
 }
@@ -29,7 +30,7 @@ export default async function DangBai() {
     db().from('fb_trang').select('id, ten').in('id', trangChu).order('ten'),
     db()
       .from('bai_viet')
-      .select('id, noi_dung, anh, tao_luc, dang_trang (id, trang_id, hen_luc, fb_post_id, trang_thai, loi)')
+      .select('id, noi_dung, anh, bien_the, tao_luc, dang_trang (id, trang_id, hen_luc, fb_post_id, trang_thai, loi)')
       .eq('nguoi_dung_id', nguoiDung.id)
       .order('tao_luc', { ascending: false })
       .limit(50),
@@ -61,6 +62,7 @@ export default async function DangBai() {
                     <p className="mt-1 text-xs text-phu">
                       {gio(b.tao_luc)}
                       {b.anh.length > 0 && ` · ${b.anh.length} ảnh`}
+                      {b.bien_the.length > 0 && ` · ${b.bien_the.length + 1} phiên bản`}
                     </p>
                   </div>
                 </div>

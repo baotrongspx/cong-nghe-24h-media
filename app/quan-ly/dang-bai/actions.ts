@@ -35,6 +35,7 @@ export async function taoBaiViet(_truoc: KetQua | null, form: FormData): Promise
   const goc = `${process.env.SUPABASE_URL?.trim()}/storage/v1/object/public/${KHO_ANH}/${nguoiDung.id}/`
   const anh = form.getAll('anh').map(String).filter((u) => u.startsWith(goc)).slice(0, 10)
   const trang = form.getAll('trang_id').map(String).filter((t) => trangChu.includes(t))
+  const bienThe = form.getAll('bien_the').map((x) => String(x).trim()).filter(Boolean).slice(0, 4)
   const henChuoi = String(form.get('hen_luc') ?? '')
   const henLuc = form.get('che_do') === 'hen' && henChuoi ? tuGioVN(henChuoi) : undefined
 
@@ -45,7 +46,7 @@ export async function taoBaiViet(_truoc: KetQua | null, form: FormData): Promise
     if (phut > 29 * 24 * 60) return { ok: false, thongBao: 'Facebook chỉ cho hẹn giờ trong vòng 29 ngày' }
   }
 
-  const { data: bai, error } = await db().from('bai_viet').insert({ nguoi_dung_id: nguoiDung.id, noi_dung: noiDung, anh }).select('id').single()
+  const { data: bai, error } = await db().from('bai_viet').insert({ nguoi_dung_id: nguoiDung.id, noi_dung: noiDung, anh, bien_the: bienThe }).select('id').single()
   if (error) return { ok: false, thongBao: error.message }
 
   // Đăng / hẹn giờ lên từng Fanpage đã chọn

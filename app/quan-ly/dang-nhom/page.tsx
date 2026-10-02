@@ -11,12 +11,12 @@ export default async function DangNhom({ searchParams }: PageProps<'/quan-ly/dan
   const { nguoiDung } = await batBuocDangNhap()
   const { bai: baiChon } = await searchParams
   const [{ data: dsBai }, { data: dsNhom }, { data: dsDaDang }, { count: homNay }] = await Promise.all([
-    db().from('bai_viet').select('id, noi_dung, anh').eq('nguoi_dung_id', nguoiDung.id).order('tao_luc', { ascending: false }).limit(30),
+    db().from('bai_viet').select('id, noi_dung, anh, bien_the').eq('nguoi_dung_id', nguoiDung.id).order('tao_luc', { ascending: false }).limit(30),
     db().from('nhom_fb').select('id, ten, link, ghi_chu').eq('nguoi_dung_id', nguoiDung.id).order('ten'),
     db().from('dang_nhom').select('nhom_id, bai_viet_id, dang_luc').eq('nguoi_dung_id', nguoiDung.id).order('dang_luc', { ascending: false }).limit(1000),
     db().from('dang_nhom').select('*', { count: 'exact', head: true }).eq('nguoi_dung_id', nguoiDung.id).gte('dang_luc', dauNgayVN()),
   ])
-  const bai = (dsBai ?? []) as { id: string; noi_dung: string; anh: string[] }[]
+  const bai = (dsBai ?? []) as { id: string; noi_dung: string; anh: string[]; bien_the: string[] }[]
   const dangChon = bai.find((b) => b.id === baiChon) ?? bai[0]
   const nhom = dsNhom ?? []
   const daDang = dsDaDang ?? []
@@ -84,7 +84,7 @@ export default async function DangNhom({ searchParams }: PageProps<'/quan-ly/dan
               Đăng cùng một nội dung vào quá nhiều nhóm trong ngày dễ bị Facebook đánh dấu spam và hạn chế nick. Nên nghỉ, mai đăng tiếp.
             </p>
           )}
-          <DanhSachNhom key={dangChon?.id ?? 'khong'} nhom={dsHienThi} bai={dangChon ? { id: dangChon.id, noiDung: dangChon.noi_dung } : null} />
+          <DanhSachNhom key={dangChon?.id ?? 'khong'} nhom={dsHienThi} bai={dangChon ? { id: dangChon.id, noiDung: dangChon.noi_dung, bienThe: dangChon.bien_the } : null} />
         </section>
       </div>
     </div>

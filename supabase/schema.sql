@@ -175,3 +175,6 @@ alter table bai_viet enable row level security;
 alter table dang_trang enable row level security;
 alter table nhom_fb enable row level security;
 alter table dang_nhom enable row level security;
+
+-- Các phiên bản nội dung khác của bài (trợ lý đăng nhóm xoay vòng để đỡ bị coi là spam)
+alter table bai_viet add column if not exists bien_the text[] not null default '{}';

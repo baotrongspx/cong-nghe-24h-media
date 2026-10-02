@@ -1,6 +1,6 @@
 'use client'
 
-import { useActionState, useState, useTransition } from 'react'
+import { useActionState, useEffect, useEffectEvent, useState, useTransition } from 'react'
 import { danhDauDaDangNhom, themNhieuNhom, xoaNhom } from '../dang-bai/actions'
 import { NutHanhDong } from '../NutHanhDong'
 
@@ -176,7 +176,10 @@ export function FormThemNhieuNhom() {
   )
 }
 
-export default function DanhSachNhom({ nhom, bai }: { nhom: Nhom[]; bai: { id: string; noiDung: string } | null }) {
+export default function DanhSachNhom({ nhom, bai }: { nhom: Nhom[]; bai: { id: string; noiDung: string; bienThe: string[] } | null }) {
+  // Các phiên bản nội dung: xoay vòng mỗi nhóm một bản
+  const banNoiDung = bai ? [bai.noiDung, ...bai.bienThe].filter((x) => x.trim()) : []
+  const noiDungThu = (i: number) => (banNoiDung.length ? banNoiDung[i % banNoiDung.length] : '')
   // Mặc định tích sẵn các nhóm chưa đăng bài đang chọn
   const [chon, setChon] = useState<Set<string>>(() => new Set(bai ? nhom.filter((n) => !n.daDangBaiNay).map((n) => n.id) : []))
   const [hangDoi, setHangDoi] = useState<string[] | null>(null) // các nhóm đang đăng lần lượt
@@ -198,7 +201,7 @@ export default function DanhSachNhom({ nhom, bai }: { nhom: Nhom[]; bai: { id: s
     if (!ds.length) return
     setHangDoi(ds)
     setViTri(0)
-    chepVaMo(bai.noiDung, theoId.get(ds[0])!.link)
+    chepVaMo(noiDungThu(0), theoId.get(ds[0])!.link)
   }
 
   // Sang nhóm kế tiếp; daDang = true thì đánh dấu nhóm hiện tại đã đăng
@@ -206,7 +209,7 @@ export default function DanhSachNhom({ nhom, bai }: { nhom: Nhom[]; bai: { id: s
     if (!bai || !hangDoi) return
     const hienTai = hangDoi[viTri]
     const sau = hangDoi[viTri + 1]
-    if (sau) chepVaMo(bai.noiDung, theoId.get(sau)!.link)
+    if (sau) chepVaMo(noiDungThu(viTri + 1), theoId.get(sau)!.link)
     if (daDang) chay(() => danhDauDaDangNhom(hienTai, bai.id))
     setChon((c) => {
       const m = new Set(c)
@@ -218,6 +221,22 @@ export default function DanhSachNhom({ nhom, bai }: { nhom: Nhom[]; bai: { id: s
   }
 
   const dangDang = hangDoi ? theoId.get(hangDoi[viTri]) : null
+
+  // Phím tắt khi đăng lần lượt: Enter = đã đăng → nhóm tiếp, B = bỏ qua, Esc = dừng
+  const khiBamPhim = useEffectEvent((e: KeyboardEvent) => {
+    const o = e.target as HTMLElement
+    if (o.closest('input, textarea, select, [contenteditable="true"]')) return
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      tiep(true)
+    } else if (e.key === 'b' || e.key === 'B') tiep(false)
+    else if (e.key === 'Escape') setHangDoi(null)
+  })
+  useEffect(() => {
+    if (!hangDoi) return
+    window.addEventListener('keydown', khiBamPhim)
+    return () => window.removeEventListener('keydown', khiBamPhim)
+  }, [hangDoi])
 
   // Tìm nhóm theo tên / ghi chú, không phân biệt dấu ("cong nghe" khớp "Công Nghệ")
   const [tuKhoa, setTuKhoa] = useState('')
@@ -265,14 +284,19 @@ export default function DanhSachNhom({ nhom, bai }: { nhom: Nhom[]; bai: { id: s
               <span className="font-semibold">
                 Đang đăng ({viTri + 1}/{hangDoi!.length}): {dangDang.ten}
               </span>
-              <span className="w-full text-xs text-phu">Bài đã được chép. Trong tab nhóm vừa mở: bấm vào ô viết bài → Ctrl+V → thêm ảnh → Đăng. Xong quay lại đây.</span>
+              {banNoiDung.length > 1 && (
+                <span className="rounded bg-white px-1.5 text-xs text-phu">
+                  Phiên bản {(viTri % banNoiDung.length) + 1}/{banNoiDung.length}
+                </span>
+              )}
+              <span className="w-full text-xs text-phu">Bài đã được chép. Trong tab nhóm vừa mở: bấm vào ô viết bài → Ctrl+V → thêm ảnh → Đăng. Xong quay lại tab này và bấm <b>Enter</b> (B = bỏ qua, Esc = dừng).</span>
               <button onClick={() => tiep(true)} className="rounded-md bg-green-600 px-3 py-1.5 font-semibold text-white hover:bg-green-700">
-                ✓ Đã đăng{viTri + 1 < hangDoi!.length ? ' → nhóm tiếp' : ' (xong)'}
+                ✓ Đã đăng{viTri + 1 < hangDoi!.length ? ' → nhóm tiếp' : ' (xong)'} <kbd className="ml-1 rounded bg-white/25 px-1 text-xs">Enter</kbd>
               </button>
               <button onClick={() => tiep(false)} className="rounded-md border border-slate-300 bg-white px-3 py-1.5 hover:bg-slate-50">
                 Bỏ qua
               </button>
-              <button onClick={() => chepVaMo(bai.noiDung, dangDang.link)} className="rounded-md border border-slate-300 bg-white px-3 py-1.5 hover:bg-slate-50">
+              <button onClick={() => chepVaMo(noiDungThu(viTri), dangDang.link)} className="rounded-md border border-slate-300 bg-white px-3 py-1.5 hover:bg-slate-50">
                 Chép & mở lại
               </button>
               <button onClick={() => setHangDoi(null)} className="ml-auto text-phu hover:underline">
@@ -331,7 +355,7 @@ export default function DanhSachNhom({ nhom, bai }: { nhom: Nhom[]; bai: { id: s
             </div>
             <div className="flex shrink-0 flex-col items-end gap-1 text-xs">
               {bai && !hangDoi && (
-                <button onClick={() => chepVaMo(bai.noiDung, n.link)} className="rounded-md border border-chinh px-2 py-1 font-semibold text-chinh hover:bg-chinh/5">
+                <button onClick={() => chepVaMo(noiDungThu(nhom.indexOf(n)), n.link)} className="rounded-md border border-chinh px-2 py-1 font-semibold text-chinh hover:bg-chinh/5">
                   Chép & mở
                 </button>
               )}
