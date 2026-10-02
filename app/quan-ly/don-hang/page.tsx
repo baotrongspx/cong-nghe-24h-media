@@ -180,7 +180,7 @@ export default async function TrangDonHang({ searchParams }: PageProps<'/quan-ly
                         Chat
                       </Link>
                     )}
-                    <NutHanhDong chay={() => xoaDon(d.id)} xacNhan={`Xóa đơn #${d.ma}?`} className="ml-3 text-red-600 hover:underline">
+                    <NutHanhDong chay={xoaDon.bind(null, d.id)} xacNhan={`Xóa đơn #${d.ma}?`} className="ml-3 text-red-600 hover:underline">
                       Xóa
                     </NutHanhDong>
                   </td>
