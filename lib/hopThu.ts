@@ -26,6 +26,7 @@ type TinMoi = {
   dinhKem?: unknown
   thoiGian?: Date
   nguoiGuiId?: string // người trả lời trên phần mềm (nhân viên)
+  tuDong?: boolean // tin do hệ thống tự trả lời
 }
 
 // Chia xoay vòng: chọn người nhận chia lâu nhất chưa được giao
@@ -66,14 +67,18 @@ export async function luuTin(t: TinMoi) {
     ht = r.data
   }
 
-  const { data: tin, error } = await db()
-    .from('tin')
-    .upsert(
-      { hoi_thoai_id: ht.id, fb_id: t.fbId, chieu: t.chieu, noi_dung: t.noiDung, dinh_kem: t.dinhKem ?? null, tao_luc: luc, nguoi_gui_id: t.nguoiGuiId ?? null },
-      { onConflict: 'fb_id', ignoreDuplicates: true },
-    )
-    .select('id')
-    .maybeSingle()
+  const ghi = (them: object) =>
+    db()
+      .from('tin')
+      .upsert(
+        { hoi_thoai_id: ht.id, fb_id: t.fbId, chieu: t.chieu, noi_dung: t.noiDung, dinh_kem: t.dinhKem ?? null, tao_luc: luc, nguoi_gui_id: t.nguoiGuiId ?? null, ...them },
+        { onConflict: 'fb_id', ignoreDuplicates: true },
+      )
+      .select('id')
+      .maybeSingle()
+  let { data: tin, error } = await ghi(t.tuDong ? { tu_dong: true } : {})
+  // Chưa thêm cột tu_dong vào cơ sở dữ liệu: vẫn lưu tin, chỉ thiếu đánh dấu
+  if (error && t.tuDong && /tu_dong/.test(error.message)) ({ data: tin, error } = await ghi({}))
   if (error) throw new Error(error.message)
   if (!tin) return null
 
@@ -94,7 +99,7 @@ export async function luuTin(t: TinMoi) {
   return { hoiThoaiId: ht.id as string, tinId: tin.id as string, sdt }
 }
 
-// Tìm kịch bản tự trả lời: khớp từ khóa trước, không khớp thì kịch bản "mọi tin" (nếu 24 giờ qua shop chưa nhắn gì cho khách)
+// Tìm kịch bản tự trả lời: khớp từ khóa trước, không khớp thì kịch bản "mọi tin" (nếu shop chưa nhắn gì cho khách trong GIO_CHO_TRA_LOI_MOI_TIN giờ)
 async function timTraLoiTuDong(p: { trangId: string; loai: 'tin_nhan' | 'binh_luan'; noiDung: string | null; hoiThoaiId: string; khachTen?: string | null }) {
   // select('*'): vẫn chạy khi chưa thêm cột mới (nhan_rieng, tao_luc) vào cơ sở dữ liệu
   const { data } = await db().from('tu_dong').select('*').eq('trang_id', p.trangId).eq('bat', true).in('ap_dung', [p.loai, 'ca_hai'])
@@ -141,7 +146,7 @@ export async function xuLyTinNhan(trang: Trang, e: SuKienNhan) {
   const td = await timTraLoiTuDong({ trangId: trang.id, loai: 'tin_nhan', noiDung, hoiThoaiId: kq.hoiThoaiId })
   if (td?.traLoi) {
     const r = await guiTinNhan(trang.access_token, khachId, td.traLoi)
-    await luuTin({ trang, loai: 'tin_nhan', khachId, fbId: r.message_id, chieu: 'ra', noiDung: td.traLoi })
+    await luuTin({ trang, loai: 'tin_nhan', khachId, fbId: r.message_id, chieu: 'ra', noiDung: td.traLoi, tuDong: true })
   }
 }
 
@@ -209,7 +214,7 @@ export async function xuLyBinhLuan(trang: Trang, v: SuKienBinhLuan) {
 
   const td = await timTraLoiTuDong({ trangId: trang.id, loai: 'binh_luan', noiDung: v.message ?? null, hoiThoaiId: kq.hoiThoaiId, khachTen: v.from.name })
   if (!td) return
-  const chung = { trang, loai: 'binh_luan' as const, khachId: v.from.id, baiVietId: v.post_id ?? '', chieu: 'ra' as const }
+  const chung = { trang, loai: 'binh_luan' as const, khachId: v.from.id, baiVietId: v.post_id ?? '', chieu: 'ra' as const, tuDong: true }
   // Nhắn riêng trước: Facebook chỉ cho nhắn riêng 1 lần cho mỗi bình luận, trong vòng 7 ngày
   if (td.nhanRieng) {
     try {

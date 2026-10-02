@@ -203,8 +203,122 @@ create index if not exists don_hang_hoi_thoai on don_hang (hoi_thoai_id);
 alter table don_hang enable row level security;
 
 -- ============ Tự động trả lời nâng cao ============
--- tu_khoa rỗng ('{}') = trả lời mọi tin / bình luận không khớp từ khóa nào (mỗi khách tối đa 1 lần / 24 giờ)
+-- tu_khoa rỗng ('{}') = trả lời mọi tin / bình luận không khớp từ khóa nào (không chào nếu shop vừa nhắn khách trong 2 giờ)
 -- tra_loi: trả lời tin nhắn và trả lời công khai dưới bình luận ('' = không trả lời công khai)
 -- nhan_rieng: với bình luận, nhắn riêng vào inbox người bình luận ('' = không nhắn)
 alter table tu_dong add column if not exists nhan_rieng text not null default '';
 alter table tu_dong add column if not exists tao_luc timestamptz not null default now();
+
+-- ============ Báo cáo ============
+-- Đánh dấu tin do hệ thống tự trả lời (không tính vào thời gian phản hồi của nhân viên)
+alter table tin add column if not exists tu_dong boolean not null default false;
+
+-- Số liệu báo cáo tính sẵn trong cơ sở dữ liệu (Supabase chỉ trả tối đa 1.000 dòng mỗi lần truy vấn).
+-- p_trang: các Page được xem; p_chi_cua_minh: Page mà người xem chỉ thấy hội thoại / đơn của mình.
+create or replace function bao_cao(p_tu timestamptz, p_den timestamptz, p_trang text[], p_chi_cua_minh text[], p_nguoi text)
+returns json
+language sql
+stable
+as $$
+with ht as (
+  select h.id, h.trang_id, h.loai
+  from hoi_thoai h
+  where h.trang_id = any(p_trang)
+    and (not (h.trang_id = any(p_chi_cua_minh)) or h.nguoi_phu_trach = p_nguoi)
+),
+t as (
+  select x.id, x.hoi_thoai_id, x.chieu, x.tao_luc, x.nguoi_gui_id, x.tu_dong, ht.trang_id, ht.loai
+  from tin x join ht on ht.id = x.hoi_thoai_id
+  where x.tao_luc >= p_tu - interval '2 days' and x.tao_luc < p_den + interval '2 days'
+),
+trong as (select * from t where tao_luc >= p_tu and tao_luc < p_den),
+-- Lượt khách: tin vào mà tin (không tự động) liền trước không phải tin vào
+luot as (
+  select t.*, lag(chieu) over (partition by hoi_thoai_id order by tao_luc) as truoc
+  from t where not tu_dong
+),
+bat_dau as (
+  select hoi_thoai_id, tao_luc from luot
+  where chieu = 'vao' and truoc is distinct from 'vao' and tao_luc >= p_tu and tao_luc < p_den
+),
+phan_hoi as (
+  select b.hoi_thoai_id, extract(epoch from r.tao_luc - b.tao_luc) as giay, r.nguoi_gui_id
+  from bat_dau b
+  left join lateral (
+    select y.tao_luc, y.nguoi_gui_id from t y
+    where y.hoi_thoai_id = b.hoi_thoai_id and y.chieu = 'ra' and not y.tu_dong and y.tao_luc > b.tao_luc
+    order by y.tao_luc limit 1
+  ) r on true
+),
+dau_tien as (
+  select x.hoi_thoai_id, min(x.tao_luc) as luc from tin x join ht on ht.id = x.hoi_thoai_id group by x.hoi_thoai_id
+),
+cuoi as (
+  select distinct on (x.hoi_thoai_id) x.hoi_thoai_id, x.chieu, x.tao_luc
+  from tin x join ht on ht.id = x.hoi_thoai_id
+  where not x.tu_dong and x.tao_luc > now() - interval '7 days'
+  order by x.hoi_thoai_id, x.tao_luc desc
+),
+don as (
+  select d.* from don_hang d
+  where d.trang_id = any(p_trang)
+    and (not (d.trang_id = any(p_chi_cua_minh)) or d.nguoi_tao_id = p_nguoi)
+    and d.tao_luc >= p_tu and d.tao_luc < p_den
+)
+select json_build_object(
+  'tong', json_build_object(
+    'tin_nhan', (select count(*) from trong where chieu = 'vao' and loai = 'tin_nhan'),
+    'binh_luan', (select count(*) from trong where chieu = 'vao' and loai = 'binh_luan'),
+    'tin_ra', (select count(*) from trong where chieu = 'ra' and not tu_dong),
+    'tu_dong', (select count(*) from trong where chieu = 'ra' and tu_dong),
+    'khach', (select count(distinct hoi_thoai_id) from trong where chieu = 'vao'),
+    'khach_moi', (select count(*) from dau_tien where luc >= p_tu and luc < p_den),
+    'luot', (select count(*) from phan_hoi),
+    'luot_da_tra_loi', (select count(*) from phan_hoi where giay is not null),
+    'trung_vi_giay', (select percentile_cont(0.5) within group (order by giay) from phan_hoi where giay is not null),
+    'cho_tra_loi', (select count(*) from cuoi where chieu = 'vao')
+  ),
+  'theo_ngay', coalesce((
+    select json_agg(json_build_object('ngay', ngay, 'tin_nhan', tn, 'binh_luan', bl) order by ngay)
+    from (
+      select (tao_luc at time zone 'Asia/Ho_Chi_Minh')::date as ngay,
+        count(*) filter (where loai = 'tin_nhan') as tn,
+        count(*) filter (where loai = 'binh_luan') as bl
+      from trong where chieu = 'vao' group by 1
+    ) z
+  ), '[]'),
+  'theo_gio', coalesce((
+    select json_agg(json_build_object('gio', gio, 'so', so) order by gio)
+    from (select extract(hour from tao_luc at time zone 'Asia/Ho_Chi_Minh')::int as gio, count(*) as so from trong where chieu = 'vao' group by 1) z
+  ), '[]'),
+  'nhan_vien', coalesce((
+    select json_agg(z) from (
+      select n.id,
+        (select count(*) from trong where chieu = 'ra' and nguoi_gui_id = n.id) as so_tin,
+        (select count(*) from phan_hoi where nguoi_gui_id = n.id) as so_luot,
+        (select percentile_cont(0.5) within group (order by giay) from phan_hoi where nguoi_gui_id = n.id) as trung_vi_giay,
+        (select count(*) from don where nguoi_tao_id = n.id and trang_thai not in ('hoan', 'huy')) as so_don,
+        (select coalesce(sum(tong), 0) from don where nguoi_tao_id = n.id and trang_thai not in ('hoan', 'huy')) as doanh_thu
+      from (
+        select nguoi_gui_id as id from trong where chieu = 'ra' and nguoi_gui_id is not null
+        union select nguoi_tao_id from don where nguoi_tao_id is not null
+      ) n
+    ) z
+  ), '[]'),
+  'don', json_build_object(
+    'so_don', (select count(*) from don where trang_thai not in ('hoan', 'huy')),
+    'doanh_thu', (select coalesce(sum(tong), 0) from don where trang_thai not in ('hoan', 'huy')),
+    'hoan', (select count(*) from don where trang_thai = 'hoan'),
+    'huy', (select count(*) from don where trang_thai = 'huy'),
+    'theo_ngay', coalesce((
+      select json_agg(json_build_object('ngay', ngay, 'so_don', so_don, 'doanh_thu', doanh_thu) order by ngay)
+      from (
+        select (tao_luc at time zone 'Asia/Ho_Chi_Minh')::date as ngay, count(*) as so_don, sum(tong) as doanh_thu
+        from don where trang_thai not in ('hoan', 'huy') group by 1
+      ) z
+    ), '[]')
+  )
+);
+$$;
+-- Chỉ máy chủ (service role) được gọi, khách vãng lai không gọi được qua API công khai
+revoke execute on function bao_cao(timestamptz, timestamptz, text[], text[], text) from public, anon, authenticated;

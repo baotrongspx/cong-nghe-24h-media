@@ -16,16 +16,21 @@ export type KichBan = {
 export const AP_DUNG: Record<ApDung, string> = { ca_hai: 'Tin nhắn + bình luận', tin_nhan: 'Chỉ tin nhắn', binh_luan: 'Chỉ bình luận' }
 
 // Kịch bản "trả lời mọi tin" chỉ gửi khi shop chưa nhắn gì cho khách trong khoảng này (tránh làm phiền)
-export const GIO_CHO_TRA_LOI_MOI_TIN = 24
+export const GIO_CHO_TRA_LOI_MOI_TIN = 2
 
 const thuong = (s: string) => s.normalize('NFC').toLocaleLowerCase('vi')
 const thoat = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 
-// Khớp nguyên từ / cụm từ: "ck" không khớp "check", "giá" không khớp "giáo"
+const boDau = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/g, 'd').normalize('NFC')
+
+// Khớp nguyên từ / cụm từ: "ck" không khớp "check", "giá" không khớp "giáo".
+// Khách gõ không dấu ("dat hang") thì so với từ khóa đã bỏ dấu; khách gõ có dấu thì so đúng dấu ("gia đình" không khớp "giá").
 export function khopTuKhoa(noiDung: string, tuKhoa: string[]) {
   const nd = thuong(noiDung)
+  const khongDau = boDau(nd) === nd
   return tuKhoa.some((tk) => {
-    const t = thuong(tk.trim())
+    let t = thuong(tk.trim())
+    if (khongDau) t = boDau(t)
     return !!t && new RegExp(`(^|[^\\p{L}\\p{N}])${thoat(t)}($|[^\\p{L}\\p{N}])`, 'u').test(nd)
   })
 }

@@ -21,10 +21,11 @@ const TINH_NANG = [
   ['🗓️', 'Đăng bài & hẹn giờ', 'Soạn một lần, đăng ngay hoặc hẹn giờ lên nhiều Fanpage cùng lúc, kèm nhiều ảnh.'],
   ['👥', 'Trợ lý đăng nhóm', 'Lưu danh sách nhóm, chép sẵn bài và mở đúng nhóm, đánh dấu nhóm đã đăng để không trùng. An toàn cho nick.'],
   ['🧾', 'Tạo đơn ngay trong khung chat', 'Lên đơn khi đang chat, tự điền tên, SĐT, địa chỉ, gửi tin xác nhận cho khách. Theo dõi trạng thái và doanh thu.'],
+  ['📊', 'Báo cáo', 'Khách nhắn theo ngày, giờ cao điểm, tốc độ trả lời, hiệu quả từng nhân viên, đơn hàng và doanh thu.'],
   ['🧑‍💼', 'Nhân viên & chia hội thoại', 'Mời nhân viên, chia khách tự động xoay vòng hoặc thủ công, xem ai đã trả lời khách.'],
 ]
 
-const SAP_CO = ['Chốt đơn tự động khi livestream', 'Báo cáo tin nhắn, đơn hàng, doanh thu', 'Zalo OA, Instagram, TikTok']
+const SAP_CO = ['Chốt đơn tự động khi livestream', 'Zalo OA, Instagram, TikTok']
 
 const BUOC = [
   ['Đăng nhập bằng Facebook', 'Không cần tạo tài khoản, không cần cài đặt phần mềm.'],

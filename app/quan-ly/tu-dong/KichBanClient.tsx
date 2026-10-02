@@ -152,13 +152,13 @@ function FormKichBan({ trang, dau, xong, huy }: { trang: Trang[]; dau: GiaTri; x
 
       {moiTin ? (
         <p className="rounded-lg bg-blue-50 px-3 py-2 text-xs text-blue-900">
-          Gửi khi khách nhắn/bình luận mà không khớp từ khóa nào. Mỗi khách nhận tối đa 1 lần trong {GIO_CHO_TRA_LOI_MOI_TIN} giờ, và không gửi nếu shop vừa trả lời khách.
+          Gửi khi khách nhắn/bình luận mà không khớp từ khóa nào. Không gửi nếu trong {GIO_CHO_TRA_LOI_MOI_TIN} giờ qua shop đã nhắn cho khách (kể cả tin tự động), để không chào xen vào lúc đang chat.
         </p>
       ) : (
         <div>
           <p className="mb-1 text-sm font-medium">Từ khóa</p>
           <OTuKhoa ds={g.tuKhoa} doi={(tuKhoa) => doi({ tuKhoa })} />
-          <p className="mt-1 text-xs text-phu">Khớp nguyên từ, không phân biệt hoa thường. Nên thêm cả kiểu viết không dấu, viết tắt (gia, bn, ib).</p>
+          <p className="mt-1 text-xs text-phu">Khớp nguyên từ, không phân biệt hoa thường. Khách gõ không dấu vẫn khớp (dat hang = đặt hàng). Nên thêm cả kiểu viết tắt (bn, ib).</p>
         </div>
       )}
 
