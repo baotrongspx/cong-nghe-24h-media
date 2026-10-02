@@ -39,7 +39,12 @@ export async function dangKyTuVan(_truoc: KetQua | null, form: FormData): Promis
   }
   const d = kq.data
 
-  const { error } = await db().from('khach_dang_ky').insert(d)
+  let { error } = await db().from('khach_dang_ky').insert(d)
+  // Chưa tạo bảng khach_dang_ky (PGRST205): tạm lưu vào bảng cai_dat có sẵn, khóa "khach_<thời gian>"
+  if (error?.code === 'PGRST205') {
+    const khoa = `khach_${new Date().toISOString()}_${Math.random().toString(36).slice(2, 6)}`
+    ;({ error } = await db().from('cai_dat').insert({ khoa, gia_tri: { ...d, trang_thai: 'moi' } }))
+  }
   if (error) {
     console.error('Lưu đăng ký lỗi:', error.message)
     return { ok: false, thongBao: 'Hệ thống đang bận, bạn vui lòng nhắn Zalo hoặc thử lại sau ít phút.' }
