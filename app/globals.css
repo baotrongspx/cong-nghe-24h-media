@@ -1,0 +1,14 @@
+@import "tailwindcss";
+
+@theme inline {
+  --font-sans: var(--font-chu);
+  --color-chinh: #1d4ed8;
+  --color-chinh-dam: #1e3a8a;
+  --color-nhan: #f97316;
+  --color-nen: #f8fafc;
+  --color-chu: #0f172a;
+  --color-phu: #475569;
+}
+
+html { scroll-behavior: smooth; }
+body { background: #ffffff; color: var(--color-chu); }
