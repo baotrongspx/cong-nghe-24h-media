@@ -1,40 +1,87 @@
-import FormDangKy from './FormDangKy'
-import { GOI, TEN, email, soZalo } from '@/lib/thongTin'
+import Link from 'next/link'
+import BangGia from './BangGia'
+import { TEN_PHAN_MEM } from '@/lib/goiCuoc'
+import { TEN, email, soZalo } from '@/lib/thongTin'
 
 const VAN_DE = [
-  ['📉', 'Page đăng bài thất thường', 'Bận bán hàng nên tuần đăng, tuần nghỉ; khách vào thấy Page "chết".'],
-  ['💬', 'Bỏ lỡ tin nhắn', 'Khách hỏi giá lúc tối muộn, sáng hôm sau mới trả lời thì khách đã mua chỗ khác.'],
-  ['🤷', 'Không biết hiệu quả ra sao', 'Bỏ tiền thuê làm nhưng không có báo cáo rõ ràng.'],
+  ['😵', 'Tin nhắn, bình luận rải rác', 'Mỗi Page một nơi, mở đi mở lại trên điện thoại, khách hỏi giá mà quên trả lời.'],
+  ['🕵️', 'Đối thủ "cướp" khách', 'Khách để lại số điện thoại dưới bài viết, shop khác vào xin số và gọi trước bạn.'],
+  ['⌨️', 'Gõ đi gõ lại một câu', 'Giá bao nhiêu, ship thế nào, số tài khoản… ngày nào cũng gõ hàng chục lần.'],
 ]
 
-const QUY_TRINH = [
-  ['Tư vấn', 'Tìm hiểu sản phẩm, khách hàng mục tiêu và tình trạng các kênh hiện có.'],
-  ['Lên kế hoạch', 'Gửi lịch nội dung cả tháng để bạn xem trước và góp ý.'],
-  ['Duyệt bài', 'Bạn duyệt từng bài trước khi đăng. Bài nào bạn chưa đồng ý thì không đăng.'],
-  ['Đăng & chăm sóc', 'Đăng đúng lịch, trả lời bình luận, tin nhắn trong giờ làm việc.'],
-  ['Báo cáo', 'Cuối tháng gửi số liệu: lượt tiếp cận, tương tác, tin nhắn, kèm đề xuất cho tháng sau.'],
+const TINH_NANG = [
+  ['📥', 'Hộp thư chung', 'Tin nhắn Messenger và bình luận của mọi Fanpage về một màn hình, cập nhật liên tục.'],
+  ['🙈', 'Tự ẩn bình luận có SĐT', 'Bình luận chứa số điện thoại được ẩn ngay, chỉ bạn và khách thấy. Đối thủ không xin được số.'],
+  ['📞', 'Tự bắt số điện thoại', 'Số khách gửi trong tin nhắn, bình luận được lưu vào hồ sơ hội thoại, lọc nhanh khách có số.'],
+  ['🤖', 'Tự trả lời theo từ khóa', 'Khách nhắn "giá", "ship", "còn hàng không"… hệ thống trả lời ngay, cả lúc nửa đêm.'],
+  ['⚡', 'Mẫu câu trả lời nhanh', 'Gõ /gia, /stk, /ship để chèn câu trả lời soạn sẵn. Nhanh gấp nhiều lần gõ tay.'],
+  ['🏷️', 'Gắn thẻ & lọc khách', 'Phân loại Đã chốt, Hỏi giá, Bom hàng… Lọc theo thẻ, theo Page, chưa đọc, có SĐT.'],
+  ['💬', 'Trả lời công khai hoặc nhắn riêng', 'Trả lời ngay dưới bình luận hoặc nhắn thẳng vào inbox của người bình luận.'],
+  ['🗂️', 'Quản lý nhiều Fanpage', 'Kết nối nhiều Page trên một tài khoản, bật tắt từng Page, cài đặt riêng cho từng Page.'],
 ]
 
-const CAM_KET = [
-  'Chỉ dùng công cụ chính thức của Facebook, Zalo, TikTok. Không dùng phần mềm lậu đăng nhập vào tài khoản của bạn.',
-  'Không bán like, follow ảo: dễ bị nền tảng phạt, giảm tiếp cận, thậm chí khóa Page.',
-  'Nick Facebook cá nhân chỉ được nhân viên chăm sóc thủ công, không chạy tool tự động.',
-  'Bạn luôn giữ quyền quản trị cao nhất trên Page và Zalo OA của mình.',
+const SAP_CO = ['Tạo đơn hàng ngay trong khung chat', 'Chốt đơn tự động khi livestream', 'Nhân viên & chia hội thoại', 'Báo cáo tin nhắn, đơn hàng, doanh thu', 'Zalo OA, Instagram, TikTok']
+
+const BUOC = [
+  ['Đăng nhập bằng Facebook', 'Không cần tạo tài khoản, không cần cài đặt phần mềm.'],
+  ['Chọn Fanpage', 'Tích chọn các Page muốn quản lý khi Facebook hỏi quyền.'],
+  ['Bắt đầu trả lời khách', 'Tin nhắn, bình luận mới đổ về hộp thư ngay lập tức.'],
+]
+
+const AN_TOAN = [
+  'Kết nối qua API chính thức của Meta (Facebook). Không yêu cầu mật khẩu Facebook.',
+  'Bạn chọn Page nào được kết nối và có thể gỡ quyền bất cứ lúc nào trong cài đặt Facebook.',
+  'Không đăng nhập hộ, không dùng tool giả lập trình duyệt nên không lo bị khóa nick, khóa Page.',
+  'Dữ liệu tin nhắn của shop chỉ shop xem được.',
 ]
 
 const HOI_DAP = [
-  ['Bảng giá thế nào?', 'Giá tùy số kênh, số bài mỗi tháng và lĩnh vực. Bạn để lại thông tin, chúng tôi gửi báo giá cụ thể trong ngày làm việc.'],
-  ['Tôi có phải giao mật khẩu không?', 'Không. Bạn chỉ cần thêm chúng tôi làm biên tập viên hoặc quản trị viên trên Page và Zalo OA, và có thể gỡ bất cứ lúc nào.'],
-  ['Có ký hợp đồng không, tối thiểu bao lâu?', 'Có hợp đồng dịch vụ theo tháng. Nên thử tối thiểu 3 tháng để nội dung đủ thời gian phát huy.'],
-  ['Phí quảng cáo có nằm trong gói không?', 'Không. Tiền chạy quảng cáo bạn trả thẳng cho Facebook/TikTok. Chúng tôi có thể tư vấn và quản lý giúp nếu cần.'],
+  ['Phần mềm có mất phí không?', 'Trong giai đoạn ra mắt, gói Miễn phí dùng được đầy đủ tính năng với tối đa 3 Fanpage. Các gói trả phí cho nhiều Page hơn sẽ mở bán sau.'],
+  ['Có phải cài đặt gì không?', 'Không. Phần mềm chạy trên trình duyệt máy tính và điện thoại. Chỉ cần đăng nhập bằng Facebook.'],
+  ['Có cần đưa mật khẩu Facebook không?', 'Không bao giờ. Bạn đăng nhập trực tiếp trên trang của Facebook và cấp quyền cho các Page bạn chọn.'],
+  ['Vì sao bình luận bị ẩn mà khách vẫn thấy?', 'Facebook cho phép Page ẩn bình luận: người bình luận và bạn bè họ vẫn thấy, người khác (kể cả đối thủ) không thấy.'],
+  ['Có trả lời được tin nhắn cũ không?', 'Phần mềm nhận tin nhắn, bình luận từ lúc kết nối. Theo quy định của Facebook, Page chỉ nhắn được cho khách trong 24 giờ kể từ tin cuối của khách.'],
 ]
 
-const LICH_MAU = [
-  ['T2', 'Fanpage', 'Giới thiệu sản phẩm mới', 'Đã duyệt', 'bg-green-100 text-green-700'],
-  ['T3', 'Zalo OA', 'Tin nhắn ưu đãi khách cũ', 'Đã duyệt', 'bg-green-100 text-green-700'],
-  ['T4', 'TikTok', 'Video hậu trường 30 giây', 'Chờ duyệt', 'bg-amber-100 text-amber-700'],
-  ['T6', 'Fanpage', 'Chia sẻ cảm nhận khách hàng', 'Đang soạn', 'bg-slate-100 text-slate-600'],
-]
+function HopThuMinhHoa() {
+  const ds = [
+    ['Thu Hà', '💬', 'Áo này còn size M không shop?', '2', ['Hỏi giá', '#f97316']],
+    ['Minh Tuấn', '🗨️', 'Đã ẩn: 0912 *** 678 lấy 2 cái', '', ['Có SĐT', '#16a34a']],
+    ['Lan Anh', '💬', 'Bạn: Dạ shop gửi mình bảng giá ạ', '', ['Đã chốt', '#2563eb']],
+  ] as const
+  return (
+    <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl shadow-blue-900/10">
+      <div className="flex items-center gap-2 border-b border-slate-100 px-4 py-3">
+        <span className="font-extrabold text-chinh-dam">24H<span className="text-nhan"> Page</span></span>
+        <span className="ml-auto flex gap-1 text-[11px]">
+          {['Tất cả', 'Chưa đọc', 'Có SĐT'].map((x, i) => (
+            <span key={x} className={`rounded-full px-2 py-0.5 ${i === 0 ? 'bg-chinh text-white' : 'bg-slate-100 text-phu'}`}>{x}</span>
+          ))}
+        </span>
+      </div>
+      <ul>
+        {ds.map(([ten, icon, tin, chua, [the, mau]]) => (
+          <li key={ten} className="flex gap-3 border-b border-slate-100 px-4 py-3 last:border-0">
+            <div className="relative grid h-10 w-10 shrink-0 place-items-center rounded-full bg-slate-200 font-semibold text-phu">
+              {ten.charAt(0)}
+              <span className="absolute -bottom-1 -right-1 text-sm">{icon}</span>
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className={chua ? 'font-bold' : 'font-medium'}>{ten}</p>
+              <p className={`truncate text-sm ${chua ? 'font-semibold' : 'text-phu'}`}>{tin}</p>
+              <span className="mt-1 inline-block rounded px-1.5 text-[11px] text-white" style={{ background: mau }}>{the}</span>
+            </div>
+            {chua && <span className="h-5 rounded-full bg-red-500 px-1.5 text-xs font-bold text-white">{chua}</span>}
+          </li>
+        ))}
+      </ul>
+      <div className="flex gap-2 border-t border-slate-100 bg-nen p-3">
+        <span className="flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-phu">/gia</span>
+        <span className="rounded-lg bg-chinh px-4 py-2 text-sm font-semibold text-white">Gửi</span>
+      </div>
+    </div>
+  )
+}
 
 export default function TrangChu() {
   const zalo = soZalo()
@@ -42,67 +89,58 @@ export default function TrangChu() {
   return (
     <>
       <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/90 backdrop-blur">
-        <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4">
-          <a href="#" className="text-lg font-extrabold tracking-tight text-chinh-dam">
-            Công Nghệ 24H<span className="text-nhan"> Media</span>
-          </a>
+        <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-4 px-4">
+          <Link href="/" className="text-lg font-extrabold tracking-tight text-chinh-dam">
+            24H<span className="text-nhan"> Page</span>
+          </Link>
           <nav className="hidden gap-7 text-[15px] font-medium text-phu md:flex">
-            <a href="#dich-vu" className="hover:text-chinh">Dịch vụ</a>
-            <a href="#quy-trinh" className="hover:text-chinh">Quy trình</a>
+            <a href="#tinh-nang" className="hover:text-chinh">Tính năng</a>
+            <a href="#bang-gia" className="hover:text-chinh">Bảng giá</a>
             <a href="#hoi-dap" className="hover:text-chinh">Hỏi đáp</a>
+            <Link href="/dich-vu" className="hover:text-chinh">Dịch vụ chăm sóc Page</Link>
           </nav>
-          <a href="#dang-ky" className="rounded-lg bg-chinh px-4 py-2 text-sm font-semibold text-white hover:bg-chinh-dam">
-            Nhận tư vấn
-          </a>
+          <div className="flex items-center gap-2">
+            <Link href="/dang-nhap" className="hidden rounded-lg px-3 py-2 text-sm font-semibold text-phu hover:text-chinh sm:block">
+              Đăng nhập
+            </Link>
+            <Link href="/dang-nhap" className="rounded-lg bg-chinh px-4 py-2 text-sm font-semibold text-white hover:bg-chinh-dam">
+              Dùng miễn phí
+            </Link>
+          </div>
         </div>
       </header>
 
       <main className="flex-1">
         {/* Mở đầu */}
         <section className="bg-gradient-to-b from-blue-50 to-white">
-          <div className="mx-auto grid max-w-6xl items-center gap-10 px-4 py-16 md:grid-cols-[1.2fr_1fr] md:py-24">
+          <div className="mx-auto grid max-w-6xl items-center gap-12 px-4 py-16 md:grid-cols-[1.15fr_1fr] md:py-24">
             <div>
-              <p className="mb-4 inline-block rounded-full bg-blue-100 px-3 py-1 text-sm font-semibold text-chinh">
-                Fanpage · Zalo OA · TikTok
+              <p className="mb-4 inline-block rounded-full bg-orange-100 px-3 py-1 text-sm font-semibold text-nhan">
+                🎉 Miễn phí trong giai đoạn ra mắt
               </p>
               <h1 className="text-4xl font-extrabold leading-tight tracking-tight md:text-5xl">
-                Kênh bán hàng online <span className="text-chinh">luôn hoạt động</span>, bạn chỉ cần tập trung bán hàng
+                Quản lý <span className="text-chinh">tin nhắn & bình luận</span> mọi Fanpage trên một màn hình
               </h1>
               <p className="mt-5 max-w-xl text-lg text-phu">
-                Chúng tôi lên kế hoạch nội dung, đăng bài, trả lời khách và báo cáo hằng tháng cho Fanpage, Zalo OA và
-                TikTok của doanh nghiệp bạn.
+                {TEN_PHAN_MEM} giúp shop online trả lời khách nhanh hơn, không bỏ sót đơn, chống đối thủ xin số điện thoại khách.
               </p>
               <div className="mt-8 flex flex-wrap gap-3">
-                <a href="#dang-ky" className="rounded-lg bg-nhan px-6 py-3 font-semibold text-white shadow-sm hover:brightness-105">
-                  Nhận tư vấn miễn phí
-                </a>
-                <a href="#dich-vu" className="rounded-lg border border-slate-300 bg-white px-6 py-3 font-semibold hover:border-chinh hover:text-chinh">
-                  Xem các gói dịch vụ
+                <Link href="/dang-nhap" className="rounded-lg bg-nhan px-6 py-3 font-semibold text-white shadow-sm hover:brightness-105">
+                  Dùng miễn phí ngay
+                </Link>
+                <a href="#tinh-nang" className="rounded-lg border border-slate-300 bg-white px-6 py-3 font-semibold hover:border-chinh hover:text-chinh">
+                  Xem tính năng
                 </a>
               </div>
+              <p className="mt-5 text-sm text-phu">✔ Không cần cài đặt &nbsp; ✔ Đăng nhập bằng Facebook &nbsp; ✔ API chính thức của Meta</p>
             </div>
-            <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-xl shadow-blue-900/5">
-              <p className="text-sm font-semibold text-phu">Lịch nội dung tuần này</p>
-              <ul className="mt-4 grid gap-3 text-[15px]">
-                {LICH_MAU.map(([ngay, kenh, bai, tt, mau]) => (
-                  <li key={ngay} className="flex items-center gap-3 rounded-lg bg-nen p-3">
-                    <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-white font-bold text-chinh shadow-sm">{ngay}</span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate font-medium">{bai}</span>
-                      <span className="text-sm text-phu">{kenh}</span>
-                    </span>
-                    <span className={`shrink-0 rounded-full px-2.5 py-0.5 text-xs font-semibold ${mau}`}>{tt}</span>
-                  </li>
-                ))}
-              </ul>
-              <p className="mt-4 text-xs text-phu">Minh họa cổng khách hàng: bạn xem lịch và duyệt bài trước khi đăng.</p>
-            </div>
+            <HopThuMinhHoa />
           </div>
         </section>
 
         {/* Vấn đề */}
         <section className="mx-auto max-w-6xl px-4 py-16">
-          <h2 className="text-center text-3xl font-bold tracking-tight">Bạn có đang gặp những chuyện này?</h2>
+          <h2 className="text-center text-3xl font-bold tracking-tight">Bán hàng Fanpage có đang khiến bạn mệt?</h2>
           <div className="mt-10 grid gap-5 md:grid-cols-3">
             {VAN_DE.map(([icon, tieuDe, moTa]) => (
               <div key={tieuDe} className="rounded-2xl border border-slate-200 p-6">
@@ -114,53 +152,37 @@ export default function TrangChu() {
           </div>
         </section>
 
-        {/* Gói dịch vụ */}
-        <section id="dich-vu" className="scroll-mt-16 bg-nen py-16">
+        {/* Tính năng */}
+        <section id="tinh-nang" className="scroll-mt-16 bg-nen py-16">
           <div className="mx-auto max-w-6xl px-4">
-            <h2 className="text-center text-3xl font-bold tracking-tight">Các gói dịch vụ</h2>
-            <p className="mx-auto mt-3 max-w-2xl text-center text-phu">
-              Giá được báo theo số kênh, số bài mỗi tháng và lĩnh vực của bạn. Để lại thông tin để nhận báo giá cụ thể.
-            </p>
-            <div className="mt-10 grid gap-6 md:grid-cols-3">
-              {GOI.map((g) => (
-                <div
-                  key={g.ma}
-                  className={`relative flex flex-col rounded-2xl bg-white p-7 ${g.noiBat ? 'border-2 border-chinh shadow-xl shadow-blue-900/10' : 'border border-slate-200'}`}
-                >
-                  {g.noiBat && (
-                    <span className="absolute -top-3 left-7 rounded-full bg-chinh px-3 py-1 text-xs font-semibold text-white">
-                      Phổ biến
-                    </span>
-                  )}
-                  <h3 className="text-xl font-bold">{g.ten}</h3>
-                  <p className="mt-2 min-h-12 text-sm text-phu">{g.danhCho}</p>
-                  <p className="mt-5 text-2xl font-extrabold text-chinh-dam">Liên hệ báo giá</p>
-                  <ul className="mt-6 grid flex-1 content-start gap-3 text-[15px]">
-                    {g.gom.map((x) => (
-                      <li key={x} className="flex gap-2.5">
-                        <span className="mt-0.5 text-chinh">✔</span>
-                        {x}
-                      </li>
-                    ))}
-                  </ul>
-                  <a
-                    href="#dang-ky"
-                    className={`mt-7 rounded-lg px-5 py-2.5 text-center font-semibold ${g.noiBat ? 'bg-chinh text-white hover:bg-chinh-dam' : 'border border-slate-300 hover:border-chinh hover:text-chinh'}`}
-                  >
-                    Nhận báo giá
-                  </a>
+            <h2 className="text-center text-3xl font-bold tracking-tight">Tính năng</h2>
+            <p className="mx-auto mt-3 max-w-2xl text-center text-phu">Mọi thứ shop cần để chăm sóc khách trên Fanpage, gói gọn trong một màn hình.</p>
+            <div className="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+              {TINH_NANG.map(([icon, tieuDe, moTa]) => (
+                <div key={tieuDe} className="rounded-2xl border border-slate-200 bg-white p-6">
+                  <p className="text-3xl">{icon}</p>
+                  <h3 className="mt-3 font-semibold">{tieuDe}</h3>
+                  <p className="mt-2 text-sm text-phu">{moTa}</p>
                 </div>
               ))}
+            </div>
+            <div className="mt-8 rounded-2xl border border-dashed border-slate-300 bg-white p-6">
+              <p className="font-semibold">🚀 Sắp ra mắt</p>
+              <ul className="mt-3 flex flex-wrap gap-2">
+                {SAP_CO.map((x) => (
+                  <li key={x} className="rounded-full bg-slate-100 px-3 py-1 text-sm text-phu">{x}</li>
+                ))}
+              </ul>
             </div>
           </div>
         </section>
 
-        {/* Quy trình */}
-        <section id="quy-trinh" className="mx-auto max-w-6xl scroll-mt-16 px-4 py-16">
-          <h2 className="text-center text-3xl font-bold tracking-tight">Cách chúng tôi làm việc</h2>
-          <ol className="mt-10 grid gap-5 md:grid-cols-5">
-            {QUY_TRINH.map(([tieuDe, moTa], i) => (
-              <li key={tieuDe} className="rounded-2xl border border-slate-200 p-5">
+        {/* Các bước */}
+        <section className="mx-auto max-w-5xl px-4 py-16">
+          <h2 className="text-center text-3xl font-bold tracking-tight">Bắt đầu trong 1 phút</h2>
+          <ol className="mt-10 grid gap-5 md:grid-cols-3">
+            {BUOC.map(([tieuDe, moTa], i) => (
+              <li key={tieuDe} className="rounded-2xl border border-slate-200 p-6">
                 <span className="grid h-9 w-9 place-items-center rounded-full bg-chinh font-bold text-white">{i + 1}</span>
                 <h3 className="mt-3 font-semibold">{tieuDe}</h3>
                 <p className="mt-1.5 text-sm text-phu">{moTa}</p>
@@ -169,12 +191,23 @@ export default function TrangChu() {
           </ol>
         </section>
 
-        {/* Cam kết */}
+        {/* Bảng giá */}
+        <section id="bang-gia" className="scroll-mt-16 bg-nen py-16">
+          <div className="mx-auto max-w-6xl px-4">
+            <h2 className="text-center text-3xl font-bold tracking-tight">Bảng giá</h2>
+            <p className="mx-auto mt-3 max-w-2xl text-center text-phu">Bắt đầu miễn phí. Nâng cấp khi shop cần quản lý nhiều Page hơn.</p>
+            <div className="mt-10">
+              <BangGia nutChinh={{ nhan: 'Dùng miễn phí', href: '/dang-nhap' }} />
+            </div>
+          </div>
+        </section>
+
+        {/* An toàn */}
         <section className="bg-chinh-dam py-16 text-white">
           <div className="mx-auto max-w-4xl px-4">
-            <h2 className="text-center text-3xl font-bold tracking-tight">An toàn cho tài khoản của bạn</h2>
+            <h2 className="text-center text-3xl font-bold tracking-tight">An toàn cho Page và tài khoản của bạn</h2>
             <ul className="mt-10 grid gap-4 md:grid-cols-2">
-              {CAM_KET.map((x) => (
+              {AN_TOAN.map((x) => (
                 <li key={x} className="flex gap-3 rounded-xl bg-white/10 p-5">
                   <span className="text-xl">🛡️</span>
                   <span className="text-blue-50">{x}</span>
@@ -200,27 +233,20 @@ export default function TrangChu() {
           </div>
         </section>
 
-        {/* Đăng ký */}
-        <section id="dang-ky" className="scroll-mt-16 bg-nen py-16">
-          <div className="mx-auto grid max-w-5xl gap-10 px-4 md:grid-cols-[1fr_1.4fr]">
-            <div>
-              <h2 className="text-3xl font-bold tracking-tight">Nhận tư vấn & báo giá miễn phí</h2>
-              <p className="mt-4 text-phu">
-                Để lại thông tin, chúng tôi gọi lại trong giờ làm việc để tìm hiểu nhu cầu và gửi báo giá phù hợp.
-              </p>
+        {/* Kêu gọi */}
+        <section className="bg-gradient-to-r from-chinh to-chinh-dam py-14 text-center text-white">
+          <div className="mx-auto max-w-3xl px-4">
+            <h2 className="text-3xl font-bold tracking-tight">Không bỏ lỡ khách nào từ Fanpage</h2>
+            <p className="mt-3 text-blue-100">Đăng nhập bằng Facebook và dùng thử ngay hôm nay, miễn phí.</p>
+            <div className="mt-7 flex flex-wrap justify-center gap-3">
+              <Link href="/dang-nhap" className="rounded-lg bg-nhan px-6 py-3 font-semibold text-white hover:brightness-105">
+                Dùng miễn phí ngay
+              </Link>
               {zalo && (
-                <a
-                  href={`https://zalo.me/${zalo}`}
-                  target="_blank"
-                  rel="noopener"
-                  className="mt-6 inline-flex items-center gap-2 rounded-lg bg-[#0068ff] px-5 py-3 font-semibold text-white hover:brightness-110"
-                >
-                  💬 Chat Zalo ngay
+                <a href={`https://zalo.me/${zalo}`} target="_blank" rel="noopener" className="rounded-lg bg-white/15 px-6 py-3 font-semibold hover:bg-white/25">
+                  💬 Hỏi qua Zalo
                 </a>
               )}
-            </div>
-            <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm md:p-8">
-              <FormDangKy goi={GOI} />
             </div>
           </div>
         </section>
@@ -228,11 +254,15 @@ export default function TrangChu() {
 
       <footer className="border-t border-slate-200 py-8 text-sm text-phu">
         <div className="mx-auto flex max-w-6xl flex-col gap-2 px-4 md:flex-row md:justify-between">
-          <p>© {new Date().getFullYear()} {TEN}</p>
+          <p>
+            © {new Date().getFullYear()} {TEN_PHAN_MEM} · {TEN}
+          </p>
           <p className="flex flex-wrap gap-x-5 gap-y-1">
+            <Link href="/dich-vu" className="hover:text-chinh">Dịch vụ chăm sóc Page</Link>
             {zalo && <a href={`https://zalo.me/${zalo}`} className="hover:text-chinh">Zalo: {zalo}</a>}
             {mail && <a href={`mailto:${mail}`} className="hover:text-chinh">{mail}</a>}
-            <a href="/chinh-sach-bao-mat" className="hover:text-chinh">Chính sách bảo mật</a>
+            <Link href="/chinh-sach-bao-mat" className="hover:text-chinh">Chính sách bảo mật</Link>
+            <Link href="/xoa-du-lieu" className="hover:text-chinh">Xóa dữ liệu</Link>
           </p>
         </div>
       </footer>

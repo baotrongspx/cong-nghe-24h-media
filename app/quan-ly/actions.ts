@@ -4,7 +4,8 @@ import { revalidatePath } from 'next/cache'
 import { db } from '@/lib/db'
 import { LoiFacebook, anBinhLuan, guiTinNhan, nhanRiengBinhLuan, traLoiBinhLuan } from '@/lib/facebook'
 import { luuTin, type Trang } from '@/lib/hopThu'
-import { batBuocDangNhap } from '@/lib/phien'
+import { timGoi } from '@/lib/goiCuoc'
+import { batBuocDangNhap, batBuocQuanTri } from '@/lib/phien'
 
 export type KetQua = { ok: boolean; thongBao?: string }
 
@@ -110,6 +111,34 @@ export async function caiDatTrang(trangId: string, truong: 'an_binh_luan_sdt' | 
   await kiemTraTrang(trangId)
   await db().from('fb_trang').update({ [truong]: bat }).eq('id', trangId)
   revalidatePath('/quan-ly/fanpage')
+}
+
+// Bật/tắt quản lý một page. Bật thì kiểm tra giới hạn số page của gói.
+export async function batTatQuanLyTrang(trangId: string, bat: boolean): Promise<KetQua> {
+  const { nguoiDung, goi, trangIds } = await batBuocDangNhap()
+  if (bat && trangIds.length >= goi.soTrang) {
+    return { ok: false, thongBao: `Gói ${goi.ten} quản lý tối đa ${goi.soTrang} Page. Tắt bớt Page khác hoặc nâng cấp gói.` }
+  }
+  await db().from('trang_quan_tri').update({ bat }).match({ nguoi_dung_id: nguoiDung.id, trang_id: trangId })
+  revalidatePath('/quan-ly', 'layout')
+  return { ok: true }
+}
+
+// ---- Quản trị (chủ phần mềm) ----
+export async function capNhatKhach(form: FormData) {
+  await batBuocQuanTri()
+  const id = String(form.get('id'))
+  const ngay = String(form.get('het_han') ?? '')
+  await db()
+    .from('nguoi_dung')
+    .update({
+      goi: timGoi(String(form.get('goi'))).ma,
+      het_han: ngay ? new Date(`${ngay}T23:59:59+07:00`).toISOString() : null,
+      bi_khoa: form.get('bi_khoa') === 'on',
+      ghi_chu: String(form.get('ghi_chu') ?? '').trim() || null,
+    })
+    .eq('id', id)
+  revalidatePath('/quan-ly/quan-tri')
 }
 
 export async function goTrang(trangId: string) {

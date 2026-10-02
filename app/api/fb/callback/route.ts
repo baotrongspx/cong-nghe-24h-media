@@ -2,6 +2,7 @@ import { cookies } from 'next/headers'
 import { NextResponse, type NextRequest } from 'next/server'
 import { db } from '@/lib/db'
 import { dangKyWebhook, doiCodeLayToken, graph, layDanhSachTrang } from '@/lib/facebook'
+import { goiHieuLuc } from '@/lib/goiCuoc'
 import { taoPhien } from '@/lib/phien'
 
 const veDangNhap = (req: NextRequest, loi: string) =>
@@ -23,10 +24,14 @@ export async function GET(req: NextRequest) {
       access_token: userToken,
       fields: 'id,name,picture{url}',
     })
-    const { error: loiNd } = await db()
+    // Tài khoản mới nhận gói mặc định (cột goi có default); tài khoản cũ giữ nguyên gói
+    const { data: nd, error: loiNd } = await db()
       .from('nguoi_dung')
-      .upsert({ id: me.id, ten: me.name, anh: me.picture?.data?.url ?? null })
+      .upsert({ id: me.id, ten: me.name, anh: me.picture?.data?.url ?? null, dang_nhap_luc: new Date().toISOString() })
+      .select('goi, het_han')
+      .single()
     if (loiNd) throw new Error(loiNd.message)
+    const { goi } = goiHieuLuc(nd)
 
     const trang = await layDanhSachTrang(userToken)
     if (trang.length) {
@@ -35,9 +40,14 @@ export async function GET(req: NextRequest) {
         .from('fb_trang')
         .upsert(trang.map((t) => ({ id: t.id, ten: t.name, anh: t.picture?.data?.url ?? null, access_token: t.access_token })))
       if (error) throw new Error(error.message)
-      await db()
-        .from('trang_quan_tri')
-        .upsert(trang.map((t) => ({ nguoi_dung_id: me.id, trang_id: t.id })), { ignoreDuplicates: true })
+      // Page mới kết nối: bật quản lý nếu còn chỗ trong gói, quá giới hạn thì để tắt (bật lại ở mục Fanpage)
+      const { data: daCo } = await db().from('trang_quan_tri').select('trang_id, bat').eq('nguoi_dung_id', me.id)
+      const coRoi = new Set((daCo ?? []).map((r) => r.trang_id))
+      let dangBat = (daCo ?? []).filter((r) => r.bat).length
+      const moi = trang
+        .filter((t) => !coRoi.has(t.id))
+        .map((t) => ({ nguoi_dung_id: me.id, trang_id: t.id, bat: dangBat++ < goi.soTrang }))
+      if (moi.length) await db().from('trang_quan_tri').insert(moi)
       const kq = await Promise.allSettled(trang.map((t) => dangKyWebhook(t.id, t.access_token)))
       kq.forEach((k, i) => k.status === 'rejected' && console.error(`Đăng ký webhook ${trang[i].name} lỗi:`, k.reason))
     }

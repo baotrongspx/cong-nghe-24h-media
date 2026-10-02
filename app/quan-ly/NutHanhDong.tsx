@@ -1,6 +1,6 @@
 'use client'
 
-import { useTransition } from 'react'
+import { useState, useTransition } from 'react'
 
 // Nút / công tắc gọi server action, có hỏi xác nhận nếu cần
 export function NutHanhDong({
@@ -31,16 +31,26 @@ export function NutHanhDong({
 
 export function CongTac({ bat, chay, nhan }: { bat: boolean; chay: (bat: boolean) => Promise<unknown>; nhan: string }) {
   const [dang, batDau] = useTransition()
+  const [loi, setLoi] = useState('')
   return (
     <div className="flex items-center justify-between gap-4 py-2 text-sm">
-      <span>{nhan}</span>
+      <span>
+        {nhan}
+        {loi && <span className="mt-1 block text-red-600">{loi}</span>}
+      </span>
       <button
         type="button"
         role="switch"
         aria-checked={bat}
         aria-label={nhan}
         disabled={dang}
-        onClick={() => batDau(async () => void (await chay(!bat)))}
+        onClick={() =>
+          batDau(async () => {
+            // Server action có thể trả { ok: false, thongBao } (ví dụ vượt giới hạn gói)
+            const r = (await chay(!bat)) as { ok?: boolean; thongBao?: string } | undefined
+            setLoi(r?.ok === false ? (r.thongBao ?? 'Có lỗi xảy ra') : '')
+          })
+        }
         className={`relative h-6 w-11 shrink-0 rounded-full transition ${bat ? 'bg-chinh' : 'bg-slate-300'} disabled:opacity-50`}
       >
         <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition ${bat ? 'left-5' : 'left-0.5'}`} />

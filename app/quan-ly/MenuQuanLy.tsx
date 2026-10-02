@@ -8,13 +8,15 @@ const MUC = [
   ['/quan-ly/fanpage', 'Fanpage'],
   ['/quan-ly/tu-dong', 'Tự động trả lời'],
   ['/quan-ly/mau-cau', 'Mẫu câu & thẻ'],
+  ['/quan-ly/goi-cuoc', 'Gói cước'],
 ] as const
 
-export default function MenuQuanLy() {
+export default function MenuQuanLy({ laQuanTri }: { laQuanTri: boolean }) {
   const duong = usePathname()
+  const muc: readonly (readonly [string, string])[] = laQuanTri ? [...MUC, ['/quan-ly/quan-tri', 'Quản trị']] : MUC
   return (
     <nav className="flex gap-1 overflow-x-auto text-sm">
-      {MUC.map(([href, ten]) => (
+      {muc.map(([href, ten]) => (
         <Link
           key={href}
           href={href}

@@ -3,6 +3,7 @@ import { createHmac, timingSafeEqual } from 'node:crypto'
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { db } from '@/lib/db'
+import { goiHieuLuc } from '@/lib/goiCuoc'
 
 // Phiên đăng nhập: cookie "phien" = <user id>.<hết hạn>.<chữ ký HMAC>. Không lưu token Facebook trong cookie.
 const TEN_COOKIE = 'phien'
@@ -44,12 +45,40 @@ export async function nguoiDungId() {
   return id
 }
 
-// Dùng ở trang/hành động cần đăng nhập: trả về id người dùng và danh sách page họ quản lý
+export type NguoiDung = {
+  id: string
+  ten: string
+  anh: string | null
+  goi: string
+  het_han: string | null
+  bi_khoa: boolean
+  la_quan_tri: boolean
+}
+
+// Dùng ở trang/hành động cần đăng nhập: trả về người dùng, gói đang hiệu lực và các page đang quản lý (trong giới hạn gói)
 export async function batBuocDangNhap() {
   const id = await nguoiDungId()
   if (!id) redirect('/dang-nhap')
-  const { data: nd } = await db().from('nguoi_dung').select('id, ten, anh').eq('id', id).maybeSingle()
+  const { data: nd } = await db()
+    .from('nguoi_dung')
+    .select('id, ten, anh, goi, het_han, bi_khoa, la_quan_tri')
+    .eq('id', id)
+    .maybeSingle<NguoiDung>()
   if (!nd) redirect('/dang-nhap')
-  const { data } = await db().from('trang_quan_tri').select('trang_id').eq('nguoi_dung_id', id)
-  return { nguoiDung: nd as { id: string; ten: string; anh: string | null }, trangIds: (data ?? []).map((r) => r.trang_id as string) }
+  if (nd.bi_khoa) redirect('/bi-khoa')
+  const { goi, daHet } = goiHieuLuc(nd)
+  const { data } = await db()
+    .from('trang_quan_tri')
+    .select('trang_id')
+    .eq('nguoi_dung_id', id)
+    .eq('bat', true)
+    .order('trang_id')
+  const trangIds = (data ?? []).map((r) => r.trang_id as string).slice(0, goi.soTrang)
+  return { nguoiDung: nd, goi, daHet, trangIds }
+}
+
+export async function batBuocQuanTri() {
+  const kq = await batBuocDangNhap()
+  if (!kq.nguoiDung.la_quan_tri) redirect('/quan-ly')
+  return kq
 }

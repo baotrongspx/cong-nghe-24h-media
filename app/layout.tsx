@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import { Be_Vietnam_Pro } from 'next/font/google'
-import { MO_TA, TEN, diaChiWeb } from '@/lib/thongTin'
+import { MO_TA_PHAN_MEM, TEN_PHAN_MEM } from '@/lib/goiCuoc'
+import { TEN, diaChiWeb } from '@/lib/thongTin'
 import './globals.css'
 
 const chu = Be_Vietnam_Pro({
@@ -11,9 +12,9 @@ const chu = Be_Vietnam_Pro({
 
 export const metadata: Metadata = {
   metadataBase: new URL(diaChiWeb()),
-  title: { default: `${TEN} — Chăm sóc Fanpage, Zalo OA, TikTok cho doanh nghiệp`, template: `%s | ${TEN}` },
-  description: MO_TA,
-  openGraph: { type: 'website', locale: 'vi_VN', siteName: TEN, description: MO_TA },
+  title: { default: `${TEN_PHAN_MEM} — Phần mềm quản lý tin nhắn, bình luận Fanpage`, template: `%s | ${TEN_PHAN_MEM}` },
+  description: MO_TA_PHAN_MEM,
+  openGraph: { type: 'website', locale: 'vi_VN', siteName: `${TEN_PHAN_MEM} · ${TEN}`, description: MO_TA_PHAN_MEM },
 }
 
 export default function RootLayout({ children }: LayoutProps<'/'>) {

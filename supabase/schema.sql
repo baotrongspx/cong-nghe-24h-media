@@ -103,3 +103,13 @@ alter table tin enable row level security;
 alter table the_hoi_thoai enable row level security;
 alter table mau_cau enable row level security;
 alter table tu_dong enable row level security;
+
+-- ============ Gói cước & quản trị (chạy lại cả file cũng được) ============
+alter table nguoi_dung add column if not exists goi text not null default 'mien_phi';
+alter table nguoi_dung add column if not exists het_han timestamptz;          -- null = không hết hạn
+alter table nguoi_dung add column if not exists bi_khoa boolean not null default false;
+alter table nguoi_dung add column if not exists la_quan_tri boolean not null default false;
+alter table nguoi_dung add column if not exists ghi_chu text;
+alter table nguoi_dung add column if not exists dang_nhap_luc timestamptz;
+-- Page nào đang được quản lý (tính vào giới hạn gói)
+alter table trang_quan_tri add column if not exists bat boolean not null default true;
