@@ -82,7 +82,7 @@ export default function SoanBai({ trang }: { trang: { id: string; ten: string }[
           <div className="mt-1 flex flex-wrap gap-3 text-sm">
             {trang.map((t) => (
               <label key={t.id} className="flex items-center gap-1.5">
-                <input type="checkbox" name="trang_id" value={t.id} /> {t.ten}
+                <input type="checkbox" name="trang_id" value={t.id} defaultChecked /> {t.ten}
               </label>
             ))}
           </div>

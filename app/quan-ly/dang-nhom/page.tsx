@@ -84,7 +84,7 @@ export default async function DangNhom({ searchParams }: PageProps<'/quan-ly/dan
               Đăng cùng một nội dung vào quá nhiều nhóm trong ngày dễ bị Facebook đánh dấu spam và hạn chế nick. Nên nghỉ, mai đăng tiếp.
             </p>
           )}
-          <DanhSachNhom nhom={dsHienThi} bai={dangChon ? { id: dangChon.id, noiDung: dangChon.noi_dung } : null} />
+          <DanhSachNhom key={dangChon?.id ?? 'khong'} nhom={dsHienThi} bai={dangChon ? { id: dangChon.id, noiDung: dangChon.noi_dung } : null} />
         </section>
       </div>
     </div>

@@ -43,7 +43,8 @@ export function FormThemNhieuNhom() {
 }
 
 export default function DanhSachNhom({ nhom, bai }: { nhom: Nhom[]; bai: { id: string; noiDung: string } | null }) {
-  const [chon, setChon] = useState<Set<string>>(new Set())
+  // Mặc định tích sẵn các nhóm chưa đăng bài đang chọn
+  const [chon, setChon] = useState<Set<string>>(() => new Set(bai ? nhom.filter((n) => !n.daDangBaiNay).map((n) => n.id) : []))
   const [hangDoi, setHangDoi] = useState<string[] | null>(null) // các nhóm đang đăng lần lượt
   const [viTri, setViTri] = useState(0)
   const [, chay] = useTransition()
