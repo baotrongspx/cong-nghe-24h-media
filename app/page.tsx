@@ -262,6 +262,7 @@ export default function TrangChu() {
             {zalo && <a href={`https://zalo.me/${zalo}`} className="hover:text-chinh">Zalo: {zalo}</a>}
             {mail && <a href={`mailto:${mail}`} className="hover:text-chinh">{mail}</a>}
             <Link href="/chinh-sach-bao-mat" className="hover:text-chinh">Chính sách bảo mật</Link>
+            <Link href="/dieu-khoan" className="hover:text-chinh">Điều khoản</Link>
             <Link href="/xoa-du-lieu" className="hover:text-chinh">Xóa dữ liệu</Link>
           </p>
         </div>
