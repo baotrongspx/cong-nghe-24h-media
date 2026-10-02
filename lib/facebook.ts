@@ -17,8 +17,9 @@ export const QUYEN = [
 ]
 
 export function cauHinhApp() {
-  const id = process.env.FACEBOOK_APP_ID
-  const bi_mat = process.env.FACEBOOK_APP_SECRET
+  // trim(): phòng khi dán giá trị vào Vercel bị dư dấu cách / xuống dòng
+  const id = process.env.FACEBOOK_APP_ID?.trim()
+  const bi_mat = process.env.FACEBOOK_APP_SECRET?.trim()
   if (!id || !bi_mat) throw new Error('Thiếu FACEBOOK_APP_ID hoặc FACEBOOK_APP_SECRET')
   return { id, bi_mat }
 }

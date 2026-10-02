@@ -8,7 +8,7 @@ export const maxDuration = 60
 // Facebook gọi GET một lần để xác minh địa chỉ webhook
 export function GET(req: NextRequest) {
   const q = req.nextUrl.searchParams
-  if (q.get('hub.mode') === 'subscribe' && q.get('hub.verify_token') === process.env.FB_VERIFY_TOKEN) {
+  if (q.get('hub.mode') === 'subscribe' && q.get('hub.verify_token') === process.env.FB_VERIFY_TOKEN?.trim()) {
     return new Response(q.get('hub.challenge') ?? '', { status: 200 })
   }
   return new Response('Sai mã xác minh', { status: 403 })
