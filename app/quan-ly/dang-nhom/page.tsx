@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { db } from '@/lib/db'
+import { daLenFacebook, linkChiaSe } from '@/lib/linkFacebook'
 import { batBuocDangNhap } from '@/lib/phien'
 import DanhSachNhom, { FormThemNhieuNhom, type Nhom } from './DanhSachNhom'
 
@@ -11,14 +12,22 @@ export default async function DangNhom({ searchParams }: PageProps<'/quan-ly/dan
   const { nguoiDung } = await batBuocDangNhap()
   const { bai: baiChon } = await searchParams
   const [{ data: dsBai }, { data: dsNhom }, { data: dsDaDang }, { count: homNay }] = await Promise.all([
-    db().from('bai_viet').select('id, noi_dung, anh, bien_the').eq('nguoi_dung_id', nguoiDung.id).order('tao_luc', { ascending: false }).limit(30),
+    db().from('bai_viet').select('id, noi_dung, anh, bien_the, dang_trang (trang_id, trang_thai, hen_luc, fb_post_id, trang:trang_id (ten))').eq('nguoi_dung_id', nguoiDung.id).order('tao_luc', { ascending: false }).limit(30),
     db().from('nhom_fb').select('id, ten, link, ghi_chu').eq('nguoi_dung_id', nguoiDung.id).order('ten'),
     db().from('dang_nhom').select('nhom_id, bai_viet_id, dang_luc').eq('nguoi_dung_id', nguoiDung.id).order('dang_luc', { ascending: false }).limit(1000),
     db().from('dang_nhom').select('*', { count: 'exact', head: true }).eq('nguoi_dung_id', nguoiDung.id).gte('dang_luc', dauNgayVN()),
   ])
-  const bai = (dsBai ?? []) as { id: string; noi_dung: string; anh: string[]; bien_the: string[] }[]
+  const bai = (dsBai ?? []) as unknown as {
+    id: string
+    noi_dung: string
+    anh: string[]
+    bien_the: string[]
+    dang_trang: { trang_id: string; trang_thai: string; hen_luc: string | null; fb_post_id: string | null; trang: { ten: string } | null }[]
+  }[]
   const dangChon = bai.find((b) => b.id === baiChon) ?? bai[0]
   const nhom = dsNhom ?? []
+  // Bài này đã lên Fanpage nào: chia sẻ bài Page vào nhóm thì ảnh, nội dung tự đi kèm
+  const baiTrenPage = (dangChon?.dang_trang ?? []).filter(daLenFacebook)
   const daDang = dsDaDang ?? []
   const lanCuoi = (nhomId: string, baiId?: string) => daDang.find((d) => d.nhom_id === nhomId && (!baiId || d.bai_viet_id === baiId))?.dang_luc ?? null
   const dsHienThi: Nhom[] = nhom.map((n) => ({ ...n, daDangBaiNay: dangChon ? lanCuoi(n.id, dangChon.id) : null, lanCuoi: lanCuoi(n.id) }))
@@ -56,6 +65,29 @@ export default async function DangNhom({ searchParams }: PageProps<'/quan-ly/dan
               </p>
             )}
           </div>
+
+          {baiTrenPage.length > 0 && (
+            <div className="rounded-xl border-2 border-chinh/30 bg-blue-50 p-4">
+              <p className="font-semibold">⚡ Cách nhanh: chia sẻ bài Fanpage vào nhóm</p>
+              <p className="mt-1 text-xs text-phu">
+                Bấm nút → trong hộp thoại Facebook chọn <b>Chia sẻ lên nhóm</b> → chọn nhóm → <b>Đăng</b>. Ảnh và nội dung tự đi kèm, không cần chép dán. Nên chia
+                sẻ khoảng 10–15 nhóm mỗi đợt.
+              </p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {baiTrenPage.map((d) => (
+                  <a
+                    key={d.fb_post_id}
+                    href={linkChiaSe(d.fb_post_id!)}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="rounded-md bg-chinh px-3 py-1.5 text-sm font-semibold text-white hover:bg-chinh-dam"
+                  >
+                    Chia sẻ bài của {d.trang?.ten ?? 'Page'}
+                  </a>
+                ))}
+              </div>
+            </div>
+          )}
 
           {dangChon && dangChon.anh.length > 0 && (
             <div className="rounded-xl border border-slate-200 bg-white p-4">

@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { db } from '@/lib/db'
+import { daLenFacebook, linkBai, linkChiaSe } from '@/lib/linkFacebook'
 import { batBuocDangNhap } from '@/lib/phien'
 import { NutHanhDong } from '../NutHanhDong'
 import { huyHenGio, xoaBaiViet } from './actions'
@@ -75,10 +76,15 @@ export default async function DangBai() {
                           <span className={`rounded px-1.5 text-xs font-semibold ${mau}`}>{nhan}</span>
                           <span className="font-medium">{tenTrang.get(d.trang_id) ?? 'Page'}</span>
                           {d.hen_luc && <span className="text-xs text-phu">lúc {gio(d.hen_luc)}</span>}
-                          {d.fb_post_id && d.trang_thai === 'da_dang' && (
-                            <a href={`https://www.facebook.com/${d.fb_post_id}`} target="_blank" rel="noreferrer" className="text-xs text-chinh hover:underline">
-                              Xem bài
-                            </a>
+                          {d.fb_post_id && daLenFacebook(d) && (
+                            <>
+                              <a href={linkBai(d.fb_post_id)} target="_blank" rel="noreferrer" className="text-xs text-chinh hover:underline">
+                                Xem bài
+                              </a>
+                              <a href={linkChiaSe(d.fb_post_id)} target="_blank" rel="noreferrer" className="text-xs font-semibold text-chinh hover:underline">
+                                Chia sẻ vào nhóm
+                              </a>
+                            </>
                           )}
                           {d.trang_thai === 'da_hen' && (
                             <NutHanhDong chay={huyHenGio.bind(null, d.id)} xacNhan="Hủy bài hẹn giờ này trên Facebook?" className="text-xs text-red-600 hover:underline">
