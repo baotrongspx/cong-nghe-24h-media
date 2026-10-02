@@ -1,16 +1,11 @@
 import Link from 'next/link'
 import { db } from '@/lib/db'
 import { batBuocDangNhap } from '@/lib/phien'
-import { NutHanhDong } from '../NutHanhDong'
-import { themNhom, xoaNhom } from '../dang-bai/actions'
-import NutMoNhom from './NutMoNhom'
+import DanhSachNhom, { FormThemNhieuNhom, type Nhom } from './DanhSachNhom'
 
 const NGUONG_MOI_NGAY = 15
-const ngay = (s: string) =>
-  new Date(s).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
 // Đầu ngày hôm nay theo giờ Việt Nam (gọi ngoài render)
 const dauNgayVN = () => new Date(`${new Date(Date.now() + 7 * 3600_000).toISOString().slice(0, 10)}T00:00:00+07:00`).toISOString()
-const O = 'rounded-lg border border-slate-300 px-3 py-2 text-sm'
 
 export default async function DangNhom({ searchParams }: PageProps<'/quan-ly/dang-nhom'>) {
   const { nguoiDung } = await batBuocDangNhap()
@@ -25,7 +20,8 @@ export default async function DangNhom({ searchParams }: PageProps<'/quan-ly/dan
   const dangChon = bai.find((b) => b.id === baiChon) ?? bai[0]
   const nhom = dsNhom ?? []
   const daDang = dsDaDang ?? []
-  const lanCuoi = (nhomId: string, baiId?: string) => daDang.find((d) => d.nhom_id === nhomId && (!baiId || d.bai_viet_id === baiId))?.dang_luc
+  const lanCuoi = (nhomId: string, baiId?: string) => daDang.find((d) => d.nhom_id === nhomId && (!baiId || d.bai_viet_id === baiId))?.dang_luc ?? null
+  const dsHienThi: Nhom[] = nhom.map((n) => ({ ...n, daDangBaiNay: dangChon ? lanCuoi(n.id, dangChon.id) : null, lanCuoi: lanCuoi(n.id) }))
 
   return (
     <div className="h-full overflow-y-auto">
@@ -75,13 +71,7 @@ export default async function DangNhom({ searchParams }: PageProps<'/quan-ly/dan
             </div>
           )}
 
-          <form action={themNhom} className="grid gap-2 rounded-xl border border-slate-200 bg-white p-4">
-            <p className="font-semibold">Thêm nhóm đã tham gia</p>
-            <input name="ten" required placeholder="Tên nhóm" className={O} />
-            <input name="link" required type="url" placeholder="https://www.facebook.com/groups/..." className={O} />
-            <input name="ghi_chu" placeholder="Ghi chú (quy định nhóm, ngày được đăng…)" className={O} />
-            <button className="justify-self-start rounded-lg bg-chinh px-4 py-2 text-sm font-semibold text-white hover:bg-chinh-dam">Thêm nhóm</button>
-          </form>
+          <FormThemNhieuNhom />
         </section>
 
         <section>
@@ -94,37 +84,7 @@ export default async function DangNhom({ searchParams }: PageProps<'/quan-ly/dan
               Đăng cùng một nội dung vào quá nhiều nhóm trong ngày dễ bị Facebook đánh dấu spam và hạn chế nick. Nên nghỉ, mai đăng tiếp.
             </p>
           )}
-          <ul className="mt-4 space-y-3">
-            {!nhom.length && <li className="text-sm text-phu">Chưa có nhóm nào. Thêm link các nhóm bạn đã tham gia ở cột bên trái.</li>}
-            {nhom.map((n) => {
-              const baiNay = dangChon ? lanCuoi(n.id, dangChon.id) : undefined
-              const batKy = lanCuoi(n.id)
-              return (
-                <li key={n.id} className="rounded-xl border border-slate-200 bg-white p-4">
-                  <div className="flex items-start gap-2">
-                    <div className="min-w-0 flex-1">
-                      <a href={n.link} target="_blank" rel="noreferrer" className="font-semibold hover:underline">
-                        {n.ten}
-                      </a>
-                      {n.ghi_chu && <p className="text-xs text-phu">{n.ghi_chu}</p>}
-                      <p className="mt-1 text-xs text-phu">
-                        {baiNay ? <span className="font-semibold text-green-700">Đã đăng bài này {ngay(baiNay)}</span> : 'Chưa đăng bài này'}
-                        {batKy && ` · Lần đăng gần nhất ${ngay(batKy)}`}
-                      </p>
-                    </div>
-                    <NutHanhDong chay={xoaNhom.bind(null, n.id)} xacNhan={`Xóa nhóm ${n.ten}?`} className="text-xs text-red-600 hover:underline">
-                      Xóa
-                    </NutHanhDong>
-                  </div>
-                  {dangChon && (
-                    <div className="mt-3">
-                      <NutMoNhom link={n.link} noiDung={dangChon.noi_dung} nhomId={n.id} baiId={dangChon.id} />
-                    </div>
-                  )}
-                </li>
-              )
-            })}
-          </ul>
+          <DanhSachNhom nhom={dsHienThi} bai={dangChon ? { id: dangChon.id, noiDung: dangChon.noi_dung } : null} />
         </section>
       </div>
     </div>

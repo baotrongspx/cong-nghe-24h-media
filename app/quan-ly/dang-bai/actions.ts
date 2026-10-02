@@ -92,13 +92,28 @@ export async function xoaBaiViet(id: string) {
 }
 
 // ---- Trợ lý đăng nhóm (người dùng tự bấm đăng trên Facebook) ----
-export async function themNhom(form: FormData) {
+// Dán nhiều dòng, mỗi dòng một nhóm: "link" hoặc "Tên | link" hoặc "Tên<tab>link". Bỏ qua link trùng.
+export async function themNhieuNhom(_truoc: KetQua | null, form: FormData): Promise<KetQua> {
   const { nguoiDung } = await batBuocDangNhap()
-  const link = String(form.get('link') ?? '').trim()
-  const ten = String(form.get('ten') ?? '').trim()
-  if (!/^https:\/\/(www\.|m\.|web\.)?facebook\.com\/groups\//.test(link) || !ten) return
-  await db().from('nhom_fb').insert({ nguoi_dung_id: nguoiDung.id, ten, link, ghi_chu: String(form.get('ghi_chu') ?? '').trim() || null })
+  const { data: daCo } = await db().from('nhom_fb').select('link').eq('nguoi_dung_id', nguoiDung.id)
+  const khoa = (l: string) => l.replace(/^https:\/\/(www\.|m\.|web\.)?facebook\.com\/groups\//, '').replace(/[/?#].*$/, '').toLowerCase()
+  const daCoKhoa = new Set((daCo ?? []).map((n) => khoa(n.link)))
+  const moi: { nguoi_dung_id: string; ten: string; link: string }[] = []
+  for (const dong of String(form.get('danh_sach') ?? '').split(/\r?\n/)) {
+    const m = dong.match(/https:\/\/(?:www\.|m\.|web\.)?facebook\.com\/groups\/([\w.-]+)/)
+    if (!m) continue
+    const link = `https://www.facebook.com/groups/${m[1]}`
+    const k = m[1].toLowerCase()
+    if (daCoKhoa.has(k)) continue
+    daCoKhoa.add(k)
+    const ten = dong.slice(0, dong.indexOf('http')).replace(/[|\t,;:-]+\s*$/, '').trim() || (/^\d+$/.test(m[1]) ? `Nhóm ${m[1]}` : m[1].replace(/[.-]/g, ' '))
+    moi.push({ nguoi_dung_id: nguoiDung.id, ten: ten.slice(0, 120), link })
+  }
+  if (!moi.length) return { ok: false, thongBao: 'Không tìm thấy link nhóm mới nào (link dạng https://www.facebook.com/groups/...)' }
+  const { error } = await db().from('nhom_fb').insert(moi)
+  if (error) return { ok: false, thongBao: error.message }
   revalidatePath('/quan-ly/dang-nhom')
+  return { ok: true, thongBao: `Đã thêm ${moi.length} nhóm.` }
 }
 
 export async function xoaNhom(id: string) {
