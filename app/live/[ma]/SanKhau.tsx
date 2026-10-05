@@ -24,13 +24,37 @@ async function chonGiongMay() {
   return ds.find((g) => /HoaiMy|NamMinh/i.test(g.name)) ?? ds.find((g) => g.lang.toLowerCase().startsWith('vi')) ?? null
 }
 
+// Giọng tiếng Việt của Windows đọc sai từ tiếng Anh: đổi sang phiên âm khi gửi đi đọc (phụ đề vẫn giữ chữ gốc)
+const PHIEN_AM: [RegExp, string][] = [
+  [/\biPhone\b/gi, 'Ai-phôn'],
+  [/\bSamsung\b/gi, 'Sam-sung'],
+  [/\bGalaxy\b/gi, 'Ga-la-xi'],
+  [/\bUltra\b/gi, 'Un-tra'],
+  [/\bPro\b/gi, 'Pờ-rô'],
+  [/\bMax\b/gi, 'Mác'],
+  [/\bPlus\b/gi, 'Pờ-lớt'],
+  [/\bBuds\b/gi, 'Bớt'],
+  [/\bTab\b/gi, 'Táp'],
+  [/\bgigabyte\b/gi, 'gi-ga-bai'],
+  [/\bGB\b/g, 'gi-ga-bai'],
+  [/\bwatt\b/gi, 'oát'],
+  [/\blive\b/gi, 'lai'],
+  [/\bonline\b/gi, 'on-lai'],
+  [/\bship\b/gi, 'síp'],
+  [/\bfreeship\b/gi, 'phri-síp'],
+  [/\bdeal\b/gi, 'đeo'],
+  [/\bsale\b/gi, 'seo'],
+  [/\bshop\b/gi, 'sốp'],
+]
+const phienAm = (chu: string) => PHIEN_AM.reduce((s, [mau, thay]) => s.replace(mau, thay), chu)
+
 // Nhờ chương trình live-ai-may.mjs trên máy đọc thành giọng (WAV). Không chạy thì trả null.
 async function giongTrenMay(chu: string): Promise<ArrayBuffer | null> {
   try {
     const r = await fetch('http://127.0.0.1:5123/doc', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ chu }),
+      body: JSON.stringify({ chu: phienAm(chu) }),
       signal: AbortSignal.timeout(20_000),
     })
     return r.ok ? await r.arrayBuffer() : null
