@@ -340,3 +340,31 @@ alter table hoi_thoai add column if not exists ai_tam_dung_den timestamptz;
 -- AI trả lời mọi tình huống: đứng trước kịch bản từ khóa (dùng chúng làm câu mẫu), không im lặng khi nhân viên vừa trả lời,
 -- không tự dừng khi gặp ca khó (chỉ gắn thẻ "Cần tư vấn"). Nút tạm dừng AI theo từng khách trong Hộp thư vẫn có tác dụng.
 alter table tro_ly_ai add column if not exists toan_quyen boolean not null default false;
+
+-- ============ Live AI (nhân vật ảo dẫn livestream) ============
+-- Mỗi phiên live: sản phẩm, thông tin, giọng đọc. "ma" là khóa bí mật trong link sân khấu mở bằng OBS.
+create table if not exists phien_live (
+  id uuid primary key default gen_random_uuid(),
+  ma text not null unique,
+  nguoi_dung_id text not null references nguoi_dung(id) on delete cascade,
+  ten text not null default '',
+  tiktok text not null default '',            -- tên TikTok (@...) để chương trình trên máy đọc bình luận
+  thong_tin text not null default '',         -- thông tin shop / chính sách cho AI
+  cach_noi text not null default '',
+  loi_mo_dau text not null default '',
+  giong text not null default 'Kore',
+  san_pham jsonb not null default '[]',       -- [{ ten, gia, anh, mo_ta }]
+  tao_luc timestamptz not null default now(),
+  cap_nhat_luc timestamptz not null default now()
+);
+create table if not exists live_binh_luan (
+  id bigint generated always as identity primary key,
+  phien_id uuid not null references phien_live(id) on delete cascade,
+  ten text not null default '',
+  noi_dung text not null default '',
+  da_tra_loi boolean not null default false,
+  tao_luc timestamptz not null default now()
+);
+create index if not exists live_binh_luan_phien on live_binh_luan (phien_id, id desc);
+alter table phien_live enable row level security;
+alter table live_binh_luan enable row level security;

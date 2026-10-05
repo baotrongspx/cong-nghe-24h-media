@@ -23,55 +23,22 @@ function dungHoiThoai(ds: TinHoiThoai[]) {
   return contents
 }
 
-export async function hoiGemini(heThong: string, hoiThoai: TinHoiThoai[]): Promise<KetQuaAi> {
+// Gọi Gemini, ép trả về JSON theo schema. contents: các lượt user/model.
+export async function goiGeminiJson(
+  heThong: string,
+  contents: { role: 'user' | 'model'; parts: { text: string }[] }[],
+  schema: object,
+  temperature = 0.4,
+): Promise<string> {
   const khoa = process.env.GEMINI_API_KEY?.trim()
   if (!khoa) throw new Error('Chưa cài GEMINI_API_KEY')
-  const contents = dungHoiThoai(hoiThoai)
-  if (!contents.length || contents.at(-1)!.role !== 'user') throw new Error('Không có tin nào của khách để trả lời')
-
   const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL()}:generateContent`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', 'x-goog-api-key': khoa },
     body: JSON.stringify({
       systemInstruction: { parts: [{ text: heThong }] },
       contents,
-      generationConfig: {
-        temperature: 0.4,
-        responseMimeType: 'application/json',
-        responseSchema: {
-          type: 'OBJECT',
-          properties: {
-            tra_loi: { type: 'STRING', description: 'Tin trả lời gửi cho khách' },
-            can_nguoi_that: { type: 'BOOLEAN', description: 'true nếu cần nhân viên thật xử lý tiếp' },
-            don_hang: {
-              type: 'OBJECT',
-              nullable: true,
-              description: 'Chỉ điền khi khách đã chốt mua và đã có đủ: sản phẩm, số lượng, tên, số điện thoại, địa chỉ nhận hàng. Ngược lại để null.',
-              properties: {
-                khach_ten: { type: 'STRING' },
-                so_dien_thoai: { type: 'STRING' },
-                dia_chi: { type: 'STRING' },
-                san_pham: {
-                  type: 'ARRAY',
-                  items: {
-                    type: 'OBJECT',
-                    properties: {
-                      ten: { type: 'STRING', description: 'Tên sản phẩm kèm phân loại (màu, size, dung lượng)' },
-                      sl: { type: 'INTEGER' },
-                      gia: { type: 'INTEGER', description: 'Đơn giá (đồng) theo thông tin shop, 0 nếu không rõ' },
-                    },
-                    required: ['ten', 'sl', 'gia'],
-                  },
-                },
-                phi_ship: { type: 'INTEGER', description: 'Phí ship (đồng) theo thông tin shop, 0 nếu miễn phí / không rõ' },
-                ghi_chu: { type: 'STRING' },
-              },
-              required: ['khach_ten', 'so_dien_thoai', 'dia_chi', 'san_pham'],
-            },
-          },
-          required: ['tra_loi', 'can_nguoi_that'],
-        },
-      },
+      generationConfig: { temperature, responseMimeType: 'application/json', responseSchema: schema },
     }),
     signal: AbortSignal.timeout(25_000),
     cache: 'no-store',
@@ -83,6 +50,47 @@ export async function hoiGemini(heThong: string, hoiThoai: TinHoiThoai[]): Promi
     .map((p) => p.text ?? '')
     .join('')
   if (!chu) throw new Error(`Gemini không trả lời (${json.candidates?.[0]?.finishReason ?? json.promptFeedback?.blockReason ?? 'không rõ'})`)
+  return chu
+}
+
+const SCHEMA_TRA_LOI = {
+    type: 'OBJECT',
+    properties: {
+      tra_loi: { type: 'STRING', description: 'Tin trả lời gửi cho khách' },
+      can_nguoi_that: { type: 'BOOLEAN', description: 'true nếu cần nhân viên thật xử lý tiếp' },
+      don_hang: {
+        type: 'OBJECT',
+        nullable: true,
+        description: 'Chỉ điền khi khách đã chốt mua và đã có đủ: sản phẩm, số lượng, tên, số điện thoại, địa chỉ nhận hàng. Ngược lại để null.',
+        properties: {
+          khach_ten: { type: 'STRING' },
+          so_dien_thoai: { type: 'STRING' },
+          dia_chi: { type: 'STRING' },
+          san_pham: {
+            type: 'ARRAY',
+            items: {
+              type: 'OBJECT',
+              properties: {
+                ten: { type: 'STRING', description: 'Tên sản phẩm kèm phân loại (màu, size, dung lượng)' },
+                sl: { type: 'INTEGER' },
+                gia: { type: 'INTEGER', description: 'Đơn giá (đồng) theo thông tin shop, 0 nếu không rõ' },
+              },
+              required: ['ten', 'sl', 'gia'],
+            },
+          },
+          phi_ship: { type: 'INTEGER', description: 'Phí ship (đồng) theo thông tin shop, 0 nếu miễn phí / không rõ' },
+          ghi_chu: { type: 'STRING' },
+        },
+        required: ['khach_ten', 'so_dien_thoai', 'dia_chi', 'san_pham'],
+      },
+    },
+    required: ['tra_loi', 'can_nguoi_that'],
+  }
+
+export async function hoiGemini(heThong: string, hoiThoai: TinHoiThoai[]): Promise<KetQuaAi> {
+  const contents = dungHoiThoai(hoiThoai)
+  if (!contents.length || contents.at(-1)!.role !== 'user') throw new Error('Không có tin nào của khách để trả lời')
+  const chu = await goiGeminiJson(heThong, contents, SCHEMA_TRA_LOI)
   const kq = JSON.parse(chu) as {
     tra_loi?: string
     can_nguoi_that?: boolean

@@ -11,6 +11,7 @@ const MUC = [
   ['/quan-ly/fanpage', 'Fanpage'],
   ['/quan-ly/dang-bai', 'Đăng bài'],
   ['/quan-ly/dang-nhom', 'Đăng nhóm'],
+  ['/quan-ly/live', 'Live AI'],
   ['/quan-ly/tu-dong', 'Tự động trả lời'],
   ['/quan-ly/mau-cau', 'Mẫu câu & thẻ'],
   ['/quan-ly/nhan-vien', 'Nhân viên'],
