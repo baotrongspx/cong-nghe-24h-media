@@ -9,5 +9,5 @@ export const metadata: Metadata = { title: 'Live AI', robots: { index: false, fo
 export default async function TrangLive({ params }: PageProps<'/live/[ma]'>) {
   const phien = await layPhienTheoMa((await params).ma)
   if (!phien) notFound()
-  return <SanKhau ma={phien.ma} ten={phien.ten} sanPham={phien.san_pham} />
+  return <SanKhau ma={phien.ma} ten={phien.ten} sanPham={phien.san_pham} anhMc={phien.anh_mc ?? ''} />
 }

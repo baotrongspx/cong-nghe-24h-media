@@ -17,6 +17,7 @@ export type PhienLive = {
   giong: string
   san_pham: SanPhamLive[]
   kich_ban?: string // các đoạn đọc sẵn, cách nhau bằng dòng trống
+  anh_mc?: string // ảnh nhân vật MC; trống = MC hoạt hình
 }
 
 // Giọng của máy tính (giọng tiếng Việt có sẵn trong Windows / trình duyệt): miễn phí, không giới hạn

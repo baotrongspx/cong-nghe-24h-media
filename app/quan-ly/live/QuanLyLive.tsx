@@ -20,6 +20,7 @@ export type Phien = {
   giong: string
   san_pham: SanPhamLive[]
   kich_ban?: string
+  anh_mc?: string
 }
 
 // Đọc thử bằng giọng tiếng Việt có sẵn trên máy (giọng "máy tính")
@@ -135,6 +136,8 @@ function FormPhien({ dau, macDinh, xong, huy }: { dau: Phien | null; macDinh: { 
   const [tiktok, setTiktok] = useState(dau?.tiktok ?? '')
   const [giong, setGiong] = useState(dau?.giong ?? 'may')
   const [kichBan, setKichBan] = useState(dau?.kich_ban ?? '')
+  const [anhMc, setAnhMc] = useState(dau?.anh_mc ?? '')
+  const [taiAnhMc, setTaiAnhMc] = useState(false)
   const [dangViet, viet] = useTransition()
   const [loiMoDau, setLoiMoDau] = useState(dau?.loi_mo_dau ?? '')
   const [thongTin, setThongTin] = useState(dau?.thong_tin ?? macDinh.thongTin)
@@ -170,6 +173,7 @@ function FormPhien({ dau, macDinh, xong, huy }: { dau: Phien | null; macDinh: { 
         giong,
         loiMoDau,
         kichBan,
+        anhMc,
         thongTin,
         cachNoi,
         sanPham: sp.filter((x) => x.ten.trim()).map((x) => ({ ten: x.ten.trim(), gia: docTien(x.gia), anh: x.anh, mo_ta: x.mo_ta.trim() })),
@@ -195,6 +199,45 @@ function FormPhien({ dau, macDinh, xong, huy }: { dau: Phien | null; macDinh: { 
           <span className="text-sm font-medium">Tên TikTok</span>
           <input value={tiktok} onChange={(e) => setTiktok(e.target.value)} placeholder="@congnghe24h" className={`${oNhap} mt-1`} />
         </label>
+      </div>
+
+      <div>
+        <span className="text-sm font-medium">Nhân vật MC</span>
+        <span className="block text-xs text-phu">Ảnh do AI tạo, hoặc ảnh người thật <b>đã đồng ý</b> làm MC cho shop. Không dùng ảnh người khác lấy trên mạng.</span>
+        <div className="mt-2 flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            onClick={() => setAnhMc('')}
+            className={`rounded-lg border px-3 py-2 text-sm font-medium ${!anhMc ? 'border-chinh bg-chinh/5 text-chinh' : 'border-slate-300 text-phu hover:bg-slate-50'}`}
+          >
+            Hoạt hình vẽ sẵn
+          </button>
+          <label className={`flex cursor-pointer items-center gap-2 rounded-lg border px-2 py-1.5 text-sm font-medium ${anhMc ? 'border-chinh bg-chinh/5 text-chinh' : 'border-slate-300 text-phu hover:bg-slate-50'}`}>
+            {anhMc ? <img src={anhMc} alt="" className="h-10 w-8 rounded object-cover" /> : <span className="grid h-10 w-8 place-items-center rounded bg-slate-100 text-xs">+</span>}
+            {taiAnhMc ? 'Đang tải…' : anhMc ? 'Đổi ảnh nhân vật' : 'Tải ảnh nhân vật'}
+            <input
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              className="hidden"
+              onChange={async (e) => {
+                const f = e.target.files?.[0]
+                if (!f) return
+                setTaiAnhMc(true)
+                try {
+                  const link = await layLinkTaiAnh(f.type)
+                  if (!link.ok) throw new Error(link.thongBao)
+                  const r = await fetch(link.linkTai, { method: 'PUT', body: f, headers: { 'content-type': f.type } })
+                  if (!r.ok) throw new Error(`Tải ảnh lỗi (${r.status})`)
+                  setAnhMc(link.linkAnh)
+                } catch (x) {
+                  setLoi(x instanceof Error ? x.message : 'Tải ảnh lỗi')
+                } finally {
+                  setTaiAnhMc(false)
+                }
+              }}
+            />
+          </label>
+        </div>
       </div>
 
       <div>

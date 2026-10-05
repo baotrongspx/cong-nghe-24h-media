@@ -88,7 +88,7 @@ async function docBangMay(chu: string, giong: SpeechSynthesisVoice | null, dung:
 }
 
 // Sân khấu 9:16 (OBS: Browser source 1080 × 1920). Mọi kích thước theo cqh để co giãn đúng tỉ lệ.
-export default function SanKhau({ ma, ten, sanPham }: { ma: string; ten: string; sanPham: SanPham[] }) {
+export default function SanKhau({ ma, ten, sanPham, anhMc = '' }: { ma: string; ten: string; sanPham: SanPham[]; anhMc?: string }) {
   const goc = useRef<HTMLDivElement>(null)
   const ctxRef = useRef<AudioContext | null>(null)
   const [canBam, setCanBam] = useState(false)
@@ -283,10 +283,36 @@ export default function SanKhau({ ma, ten, sanPham }: { ma: string; ten: string;
           </div>
         )}
 
-        {/* MC ảo đứng sau quầy */}
-        <div className="absolute left-1/2 top-[14.5cqh] h-[42cqh] w-[28cqh] -translate-x-1/2">
-          <NhanVatAo />
-        </div>
+        {anhMc ? (
+          // Ảnh nhân vật: thở nhẹ, sáng lên và nhún theo giọng, sóng âm cạnh micro
+          <div className="absolute inset-x-0 top-[14.1cqh] h-[42cqh] overflow-hidden [mask-image:linear-gradient(to_bottom,black_78%,transparent)]">
+            <img
+              src={anhMc}
+              alt=""
+              className="sk-anh h-full w-full object-cover object-[50%_22%]"
+              style={{ transform: 'scale(calc(1.03 + var(--m, 0) * 0.012))', filter: 'brightness(calc(1 + var(--m, 0) * 0.08))' }}
+            />
+            <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_50%_35%,transparent_45%,rgba(11,16,38,0.55))]" />
+            <div className="absolute bottom-[8cqh] left-[2.5cqh] flex items-center gap-[0.9cqh] rounded-full bg-black/45 px-[1.4cqh] py-[0.8cqh] backdrop-blur">
+              <span className="text-[1.6cqh]">🎙️</span>
+              <div className="flex h-[2.6cqh] items-center gap-[0.4cqh]">
+                {[0.5, 0.9, 0.65, 1, 0.75, 0.55, 0.85].map((he, i) => (
+                  <span
+                    key={i}
+                    className="sk-song w-[0.45cqh] rounded-full bg-gradient-to-t from-fuchsia-400 to-sky-300"
+                    style={{ height: `calc(0.5cqh + var(--m, 0) * ${(he * 2.2).toFixed(2)}cqh)`, animationDelay: `${i * 90}ms` }}
+                  />
+                ))}
+              </div>
+              <span className="text-[1.4cqh] font-semibold">MC ảo AI</span>
+            </div>
+          </div>
+        ) : (
+          /* MC ảo hoạt hình đứng sau quầy */
+          <div className="absolute left-1/2 top-[14.5cqh] h-[42cqh] w-[28cqh] -translate-x-1/2">
+            <NhanVatAo />
+          </div>
+        )}
 
         {/* Quầy có tên shop */}
         <div className="absolute inset-x-[3cqh] top-[49cqh] h-[7.5cqh] rounded-t-[2cqh] bg-gradient-to-b from-[#312e81] to-[#1e1b4b] shadow-[0_-1cqh_3cqh_rgba(0,0,0,0.4)] ring-1 ring-white/10">
@@ -370,6 +396,9 @@ export default function SanKhau({ ma, ten, sanPham }: { ma: string; ten: string;
           .sk-gia { animation: sk-gia 2.2s ease-in-out infinite; }
           @keyframes sk-gia { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.06); } }
           .sk-den { animation: sk-den 12s ease-in-out infinite alternate; }
+          .sk-anh { transition: transform 90ms linear, filter 90ms linear; animation: sk-tho 6s ease-in-out infinite; transform-origin: 50% 30%; }
+          @keyframes sk-tho { 0%, 100% { translate: 0 0; rotate: -0.4deg; } 50% { translate: 0 -0.4cqh; rotate: 0.4deg; } }
+          .sk-song { transition: height 80ms linear; }
           @keyframes sk-den { from { transform: translateX(-3cqh); } to { transform: translateX(3cqh); } }
         `}</style>
       </div>

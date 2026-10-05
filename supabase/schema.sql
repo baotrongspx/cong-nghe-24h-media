@@ -371,3 +371,5 @@ alter table live_binh_luan enable row level security;
 -- Kịch bản đọc sẵn (các đoạn cách nhau bằng dòng trống): không có bình luận thì MC đọc lần lượt, không tốn lượt AI
 alter table phien_live add column if not exists kich_ban text not null default '';
 alter table phien_live alter column giong set default 'may';
+-- Ảnh nhân vật MC (người thật đã đồng ý hoặc ảnh AI do shop tạo). Trống = dùng MC hoạt hình vẽ sẵn.
+alter table phien_live add column if not exists anh_mc text not null default '';
