@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import NhanVatAo from './NhanVatAo'
 
 type SanPham = { ten: string; gia: number; anh: string; mo_ta: string }
-type Luot = { loiNoi: string; sanPham: number; traLoiCho: string[]; amThanh: string; doanSo: number; canhBao?: string }
+type Luot = { loiNoi: string; sanPham: number; traLoiCho: string[]; amThanh: string; doanSo: number; canhBao?: string; video?: string; clipSo?: number }
 type BinhLuan = { id: number; ten: string; noi_dung: string }
 
 const tien = (n: number) => `${n.toLocaleString('vi-VN')}đ`
@@ -91,6 +91,8 @@ async function docBangMay(chu: string, giong: SpeechSynthesisVoice | null, dung:
 export default function SanKhau({ ma, ten, sanPham, anhMc = '' }: { ma: string; ten: string; sanPham: SanPham[]; anhMc?: string }) {
   const goc = useRef<HTMLDivElement>(null)
   const ctxRef = useRef<AudioContext | null>(null)
+  const khungVideo = useRef<HTMLDivElement>(null)
+  const [dangVideo, setDangVideo] = useState(false)
   const [canBam, setCanBam] = useState(false)
   const [cau, setCau] = useState('')
   const [sp, setSp] = useState(sanPham.length ? 1 : 0)
@@ -133,6 +135,17 @@ export default function SanKhau({ ma, ten, sanPham, anhMc = '' }: { ma: string; 
     let spTruoc = 0
     let dauTien = true
     let doanTruoc = 0
+    let clipTruoc = 0
+    // Trình phát clip video MC (Gemini): tạo mới mỗi lần chạy, tiếng đi qua bộ đo âm lượng (sóng âm, nhịp nói)
+    const trinhPhat = document.createElement('video')
+    trinhPhat.crossOrigin = 'anonymous'
+    trinhPhat.playsInline = true
+    trinhPhat.preload = 'auto'
+    trinhPhat.className = 'h-full w-full object-cover object-[50%_22%]'
+    khungVideo.current?.appendChild(trinhPhat)
+    try {
+      ctx.createMediaElementSource(trinhPhat).connect(phanTich)
+    } catch {}
     const giongMay = chonGiongMay()
     // Trả null khi sân khấu đã dừng
     const xin = async (): Promise<Luot | null> => {
@@ -142,7 +155,7 @@ export default function SanKhau({ ma, ten, sanPham, anhMc = '' }: { ma: string; 
           const r = await fetch(`/api/live/${ma}/luot`, {
             method: 'POST',
             headers: { 'content-type': 'application/json' },
-            body: JSON.stringify({ spTruoc, daNoi: daNoi.slice(-3), dauTien, doanTruoc }),
+            body: JSON.stringify({ spTruoc, daNoi: daNoi.slice(-3), dauTien, doanTruoc, clipTruoc }),
           })
           const j = await r.json()
           if (!r.ok) throw new Error(j.loi ?? `Lỗi ${r.status}`)
@@ -167,6 +180,7 @@ export default function SanKhau({ ma, ten, sanPham, anhMc = '' }: { ma: string; 
         dauTien = false
         if (luot.sanPham) spTruoc = luot.sanPham
         if (luot.doanSo) doanTruoc = luot.doanSo
+        if (luot.clipSo) clipTruoc = luot.clipSo
         if (luot.canhBao) console.warn('Giọng Gemini lỗi, dùng giọng máy:', luot.canhBao)
         daNoi.push(luot.loiNoi)
         setLoi('')
@@ -175,6 +189,43 @@ export default function SanKhau({ ma, ten, sanPham, anhMc = '' }: { ma: string; 
         if (luot.sanPham) setSp(luot.sanPham)
         // Không có âm thanh từ máy chủ (chọn giọng máy, hoặc giọng Gemini hết lượt): máy tự đọc
         // Âm thanh: từ máy chủ (giọng Gemini), hoặc nhờ chương trình trên máy đọc (giọng Windows, dùng được trong OBS)
+        // Clip video MC nhép miệng sẵn: phát clip, phụ đề theo tiến độ clip
+        if (luot.video) {
+          let daXin = false
+          let hen: ReturnType<typeof setTimeout> | undefined
+          let theoDoi: ReturnType<typeof setInterval> | undefined
+          try {
+            trinhPhat.src = luot.video
+            setDangVideo(true)
+            await trinhPhat.play()
+            const cauList = tachCau(luot.loiNoi)
+            const tongChu = cauList.reduce((t, c) => t + c.length, 0) || 1
+            theoDoi = setInterval(() => {
+              if (!trinhPhat.duration) return
+              const daQua = (trinhPhat.currentTime / trinhPhat.duration) * tongChu
+              let cong = 0
+              const c = cauList.find((x) => (cong += x.length) >= daQua) ?? cauList.at(-1)
+              if (c) setCau(c)
+            }, 200)
+            hen = setTimeout(() => {
+              daXin = true
+              tiep = xin()
+            }, Math.max(0, ((trinhPhat.duration || 8) - 5) * 1000))
+            await new Promise<void>((xong) => {
+              const het = () => xong()
+              trinhPhat.onended = het
+              trinhPhat.onerror = het
+              setTimeout(het, ((trinhPhat.duration || 8) + 3) * 1000)
+            })
+          } catch {
+            // Không phát được clip (lỗi mạng, định dạng): bỏ qua, sang lượt sau
+          }
+          clearInterval(theoDoi)
+          clearTimeout(hen)
+          if (!daXin) tiep = xin()
+          continue
+        }
+        setDangVideo(false)
         const duLieu = luot.amThanh ? giaiMa(luot.amThanh) : await giongTrenMay(luot.loiNoi)
         if (!duLieu) {
           // Không có chương trình trên máy: trình duyệt tự đọc (Chrome / Edge; OBS không đọc được kiểu này)
@@ -228,6 +279,8 @@ export default function SanKhau({ ma, ten, sanPham, anhMc = '' }: { ma: string; 
 
     return () => {
       dung = true
+      trinhPhat.pause()
+      trinhPhat.remove()
       speechSynthesis.cancel()
       cancelAnimationFrame(raf)
       ctx.close().catch(() => {})
@@ -252,6 +305,22 @@ export default function SanKhau({ ma, ten, sanPham, anhMc = '' }: { ma: string; 
   }, [ma])
 
   const dangBan = sp ? sanPham[sp - 1] : undefined
+  // Viên "MC ảo AI" có sóng âm nhảy theo giọng (dùng cho ảnh và clip video)
+  const songAm = (
+    <div className="absolute bottom-[8cqh] left-[2.5cqh] flex items-center gap-[0.9cqh] rounded-full bg-black/45 px-[1.4cqh] py-[0.8cqh] backdrop-blur">
+      <span className="text-[1.6cqh]">🎙️</span>
+      <div className="flex h-[2.6cqh] items-center gap-[0.4cqh]">
+        {[0.5, 0.9, 0.65, 1, 0.75, 0.55, 0.85].map((he, i) => (
+          <span
+            key={i}
+            className="sk-song w-[0.45cqh] rounded-full bg-gradient-to-t from-fuchsia-400 to-sky-300"
+            style={{ height: `calc(0.5cqh + var(--m, 0) * ${(he * 2.2).toFixed(2)}cqh)`, animationDelay: `${i * 90}ms` }}
+          />
+        ))}
+      </div>
+      <span className="text-[1.4cqh] font-semibold">MC ảo AI</span>
+    </div>
+  )
   // Bình luận của khách đang được trả lời (hiện trong bong bóng cạnh MC)
   const dangDoc = binhLuan.filter((b) => dangTraLoi.includes(b.ten)).slice(-2)
   const chayChu = sanPham.filter((x) => x.ten.trim()).map((x) => `${x.ten}${x.gia ? ` — ${tien(x.gia)}` : ''}`)
@@ -293,19 +362,7 @@ export default function SanKhau({ ma, ten, sanPham, anhMc = '' }: { ma: string; 
               style={{ transform: 'scale(calc(1.03 + var(--m, 0) * 0.012))', filter: 'brightness(calc(1 + var(--m, 0) * 0.08))' }}
             />
             <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_50%_35%,transparent_45%,rgba(11,16,38,0.55))]" />
-            <div className="absolute bottom-[8cqh] left-[2.5cqh] flex items-center gap-[0.9cqh] rounded-full bg-black/45 px-[1.4cqh] py-[0.8cqh] backdrop-blur">
-              <span className="text-[1.6cqh]">🎙️</span>
-              <div className="flex h-[2.6cqh] items-center gap-[0.4cqh]">
-                {[0.5, 0.9, 0.65, 1, 0.75, 0.55, 0.85].map((he, i) => (
-                  <span
-                    key={i}
-                    className="sk-song w-[0.45cqh] rounded-full bg-gradient-to-t from-fuchsia-400 to-sky-300"
-                    style={{ height: `calc(0.5cqh + var(--m, 0) * ${(he * 2.2).toFixed(2)}cqh)`, animationDelay: `${i * 90}ms` }}
-                  />
-                ))}
-              </div>
-              <span className="text-[1.4cqh] font-semibold">MC ảo AI</span>
-            </div>
+            {songAm}
           </div>
         ) : (
           /* MC ảo hoạt hình đứng sau quầy */
@@ -313,6 +370,16 @@ export default function SanKhau({ ma, ten, sanPham, anhMc = '' }: { ma: string; 
             <NhanVatAo />
           </div>
         )}
+
+        {/* Clip video MC nhép miệng (Gemini): hiện đè lên chỗ nhân vật khi đang phát */}
+        <div
+          className={`absolute inset-x-0 top-[14.1cqh] h-[42cqh] overflow-hidden bg-[#1b1550] transition-opacity duration-300 [mask-image:linear-gradient(to_bottom,black_78%,transparent)] ${
+            dangVideo ? 'opacity-100' : 'pointer-events-none opacity-0'
+          }`}
+        >
+          <div ref={khungVideo} className="h-full w-full" />
+          {songAm}
+        </div>
 
         {/* Quầy có tên shop */}
         <div className="absolute inset-x-[3cqh] top-[49cqh] h-[7.5cqh] rounded-t-[2cqh] bg-gradient-to-b from-[#312e81] to-[#1e1b4b] shadow-[0_-1cqh_3cqh_rgba(0,0,0,0.4)] ring-1 ring-white/10">

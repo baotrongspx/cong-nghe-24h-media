@@ -8,13 +8,14 @@ export const maxDuration = 60
 export async function POST(req: NextRequest, { params }: { params: Promise<{ ma: string }> }) {
   const phien = await layPhienTheoMa((await params).ma)
   if (!phien) return NextResponse.json({ loi: 'Không tìm thấy phiên live' }, { status: 404 })
-  const than = (await req.json().catch(() => ({}))) as { spTruoc?: number; daNoi?: string[]; dauTien?: boolean; doanTruoc?: number }
+  const than = (await req.json().catch(() => ({}))) as { spTruoc?: number; daNoi?: string[]; dauTien?: boolean; doanTruoc?: number; clipTruoc?: number }
   try {
     const kq = await luotTiepTheo(phien, {
       spTruoc: Math.max(0, Number(than.spTruoc) || 0),
       daNoi: (Array.isArray(than.daNoi) ? than.daNoi : []).map(String).slice(-3),
       dauTien: !!than.dauTien,
       doanTruoc: Math.max(0, Number(than.doanTruoc) || 0),
+      clipTruoc: Math.max(0, Number(than.clipTruoc) || 0),
     })
     return NextResponse.json(kq, { headers: { 'cache-control': 'no-store' } })
   } catch (e) {

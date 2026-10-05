@@ -373,3 +373,5 @@ alter table phien_live add column if not exists kich_ban text not null default '
 alter table phien_live alter column giong set default 'may';
 -- Ảnh nhân vật MC (người thật đã đồng ý hoặc ảnh AI do shop tạo). Trống = dùng MC hoạt hình vẽ sẵn.
 alter table phien_live add column if not exists anh_mc text not null default '';
+-- Video MC tạo bằng Gemini (Veo ~8 giây/clip): [{ chu, san_pham, url }]. Không có bình luận thì sân khấu phát lần lượt các clip đã tải lên.
+alter table phien_live add column if not exists video_mc jsonb not null default '[]';

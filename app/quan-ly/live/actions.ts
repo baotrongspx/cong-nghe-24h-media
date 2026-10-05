@@ -19,6 +19,7 @@ const Phien = z.object({
   loiMoDau: z.string().trim().max(1000),
   kichBan: z.string().trim().max(30000),
   anhMc: z.string().trim().max(1000),
+  videoMc: z.array(z.object({ chu: z.string().trim().max(500), san_pham: z.number().int().min(0).max(50), url: z.string().trim().max(1000) })).max(60),
   giong: z.string().refine((g) => GIONG.some(([ma]) => ma === g), 'Giọng đọc không hợp lệ'),
   sanPham: z
     .array(z.object({ ten: z.string().trim().min(1).max(200), gia: z.number().int().min(0).max(1e10), anh: z.string().trim().max(1000), mo_ta: z.string().trim().max(500) }))
@@ -29,7 +30,7 @@ export async function luuPhienLive(duLieu: z.input<typeof Phien>): Promise<KetQu
   const { nguoiDung } = await batBuocDangNhap()
   const kt = Phien.safeParse(duLieu)
   if (!kt.success) return { ok: false, thongBao: kt.error.issues[0]?.message ?? 'Thông tin chưa hợp lệ' }
-  const { id, thongTin, cachNoi, loiMoDau, kichBan, anhMc, sanPham, ...d } = kt.data
+  const { id, thongTin, cachNoi, loiMoDau, kichBan, anhMc, videoMc, sanPham, ...d } = kt.data
   // Ảnh sản phẩm chỉ nhận ảnh đã tải lên kho của chính mình (hoặc để trống)
   const goc = `${process.env.SUPABASE_URL?.trim()}/storage/v1/object/public/`
   const giaTri = {
@@ -39,6 +40,7 @@ export async function luuPhienLive(duLieu: z.input<typeof Phien>): Promise<KetQu
     loi_mo_dau: loiMoDau,
     kich_ban: kichBan,
     anh_mc: anhMc.startsWith(goc) ? anhMc : '',
+    video_mc: videoMc.filter((c) => c.chu || c.url).map((c) => ({ ...c, url: c.url.startsWith(goc) ? c.url : '' })),
     san_pham: sanPham.map((x) => ({ ...x, anh: x.anh.startsWith(goc) ? x.anh : '' })),
     cap_nhat_luc: new Date().toISOString(),
   }
@@ -49,7 +51,7 @@ export async function luuPhienLive(duLieu: z.input<typeof Phien>): Promise<KetQu
         .insert({ ...giaTri, nguoi_dung_id: nguoiDung.id, ma: randomBytes(18).toString('base64url') })
         .select('id')
         .single()
-  if (error) return { ok: false, thongBao: /phien_live|kich_ban|anh_mc/.test(error.message) ? 'Cơ sở dữ liệu chưa cập nhật: hãy chạy lại file supabase/schema.sql trong Supabase.' : error.message }
+  if (error) return { ok: false, thongBao: /phien_live|kich_ban|anh_mc|video_mc/.test(error.message) ? 'Cơ sở dữ liệu chưa cập nhật: hãy chạy lại file supabase/schema.sql trong Supabase.' : error.message }
   if (!data) return { ok: false, thongBao: 'Không tìm thấy phiên live' }
   revalidatePath('/quan-ly/live')
   return { ok: true, id: data.id }
@@ -95,4 +97,20 @@ export async function vietKichBanAi(d: { ten: string; thongTin: string; cachNoi:
     const tb = e instanceof Error ? e.message : 'Lỗi'
     return { ok: false as const, thongBao: /rate limit|quota/i.test(tb) ? 'Gemini đã hết lượt miễn phí hôm nay, hãy tự viết kịch bản hoặc thử lại sau.' : tb }
   }
+}
+
+// Link tải video MC (tạo bằng Gemini) thẳng từ trình duyệt lên kho video, không qua máy chủ (video nặng)
+const KHO_VIDEO = 'video-mc'
+const LOAI_VIDEO: Record<string, string> = { 'video/mp4': 'mp4', 'video/webm': 'webm', 'video/quicktime': 'mov' }
+export async function layLinkTaiVideo(loai: string): Promise<{ ok: true; linkTai: string; linkVideo: string } | { ok: false; thongBao: string }> {
+  const { nguoiDung } = await batBuocDangNhap()
+  const duoi = LOAI_VIDEO[loai]
+  if (!duoi) return { ok: false, thongBao: 'Chỉ nhận video MP4, WEBM, MOV' }
+  const kho = db().storage
+  const { error: loiKho } = await kho.getBucket(KHO_VIDEO)
+  if (loiKho) await kho.createBucket(KHO_VIDEO, { public: true, fileSizeLimit: 50 * 1024 * 1024, allowedMimeTypes: Object.keys(LOAI_VIDEO) })
+  const duong = `${nguoiDung.id}/${randomBytes(12).toString('hex')}.${duoi}`
+  const { data, error } = await kho.from(KHO_VIDEO).createSignedUploadUrl(duong)
+  if (error || !data) return { ok: false, thongBao: error?.message ?? 'Không tạo được link tải video' }
+  return { ok: true, linkTai: data.signedUrl, linkVideo: kho.from(KHO_VIDEO).getPublicUrl(duong).data.publicUrl }
 }

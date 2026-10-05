@@ -3,6 +3,7 @@ import { db } from '@/lib/db'
 import { tien } from '@/lib/donHang'
 import { goiGeminiJson } from '@/lib/gemini'
 import { docThanhGiong } from '@/lib/giongNoi'
+import type { ClipMc } from '@/lib/videoMc'
 
 export type SanPhamLive = { ten: string; gia: number; anh: string; mo_ta: string }
 export type PhienLive = {
@@ -18,6 +19,7 @@ export type PhienLive = {
   san_pham: SanPhamLive[]
   kich_ban?: string // các đoạn đọc sẵn, cách nhau bằng dòng trống
   anh_mc?: string // ảnh nhân vật MC; trống = MC hoạt hình
+  video_mc?: ClipMc[] // clip MC nhép miệng tạo bằng Gemini (Veo); clip chưa có url thì bỏ qua
 }
 
 // Giọng của máy tính (giọng tiếng Việt có sẵn trong Windows / trình duyệt): miễn phí, không giới hạn
@@ -98,7 +100,10 @@ QUY TẮC:
 
 // Một lượt nói của MC ảo: trả lời bình luận (AI), hoặc đọc đoạn kịch bản kế tiếp (không tốn API),
 // hoặc AI tự giới thiệu sản phẩm kế tiếp khi chưa có kịch bản
-export async function luotTiepTheo(p: PhienLive, o: { spTruoc: number; daNoi: string[]; dauTien: boolean; doanTruoc: number }) {
+export async function luotTiepTheo(p: PhienLive, o: { spTruoc: number; daNoi: string[]; dauTien: boolean; doanTruoc: number; clipTruoc: number }) {
+  const clip = (p.video_mc ?? []).filter((c) => c.url)
+  let clipSo = o.clipTruoc
+  let video = ''
   const soSp = p.san_pham.length
   const doan = doanKichBan(p.kich_ban)
   let loiNoi = ''
@@ -106,7 +111,7 @@ export async function luotTiepTheo(p: PhienLive, o: { spTruoc: number; daNoi: st
   let traLoiCho: string[] = []
   let doanSo = o.doanTruoc
 
-  if (o.dauTien && p.loi_mo_dau.trim()) {
+  if (o.dauTien && p.loi_mo_dau.trim() && !clip.length) {
     loiNoi = p.loi_mo_dau.trim()
   } else {
     // Bình luận chưa trả lời trong 3 phút gần nhất (cũ hơn thì bỏ, khách đã đi)
@@ -124,7 +129,14 @@ export async function luotTiepTheo(p: PhienLive, o: { spTruoc: number; daNoi: st
     traLoiCho = [...new Set(bl.map((x) => x.ten))]
 
     const spTiep = soSp ? (o.spTruoc % soSp) + 1 : 0
-    if (!bl.length && doan.length) {
+    if (!bl.length && clip.length) {
+      // Không có bình luận: phát clip video MC kế tiếp (nhép miệng sẵn, có tiếng), xoay vòng
+      clipSo = (o.clipTruoc % clip.length) + 1
+      const c = clip[clipSo - 1]
+      loiNoi = c.chu
+      sanPham = c.san_pham
+      video = c.url
+    } else if (!bl.length && doan.length) {
       // Không có bình luận: đọc đoạn kịch bản kế tiếp, xoay vòng
       doanSo = (o.doanTruoc % doan.length) + 1
       loiNoi = doan[doanSo - 1]
@@ -159,14 +171,14 @@ export async function luotTiepTheo(p: PhienLive, o: { spTruoc: number; daNoi: st
   // Giọng Gemini: lỗi (vd. hết lượt miễn phí) thì để trống, sân khấu tự đọc bằng giọng máy tính
   let amThanh = ''
   let canhBao = ''
-  if (p.giong && p.giong !== GIONG_MAY) {
+  if (!video && p.giong && p.giong !== GIONG_MAY) {
     try {
       amThanh = await docThanhGiong(loiNoi.slice(0, 800), p.giong)
     } catch (e) {
       canhBao = e instanceof Error ? e.message : 'Lỗi giọng đọc'
     }
   }
-  return { loiNoi, sanPham, traLoiCho, amThanh, doanSo, canhBao }
+  return { loiNoi, sanPham, traLoiCho, amThanh, doanSo, canhBao, video, clipSo }
 }
 
 // AI soạn sẵn kịch bản đọc cho cả buổi live (chỉ tốn 1 lượt Gemini). Mỗi đoạn cách nhau một dòng trống.

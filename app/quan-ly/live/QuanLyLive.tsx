@@ -3,7 +3,9 @@
 import { useState, useTransition } from 'react'
 import { docTien, tien } from '@/lib/donHang'
 import { GIONG } from '@/lib/giongDoc'
+import type { ClipMc } from '@/lib/videoMc'
 import { layLinkTaiAnh } from '../dang-bai/actions'
+import ThuVienVideo from './ThuVienVideo'
 import { IAi, IChep, ICong, IMoNgoai, ISua, IXoa, IXong } from '../BieuTuong'
 import { NutHanhDong } from '../NutHanhDong'
 import { doiMaPhienLive, luuPhienLive, ngheThuGiong, vietKichBanAi, xoaPhienLive } from './actions'
@@ -21,6 +23,7 @@ export type Phien = {
   san_pham: SanPhamLive[]
   kich_ban?: string
   anh_mc?: string
+  video_mc?: ClipMc[]
 }
 
 // Đọc thử bằng giọng tiếng Việt có sẵn trên máy (giọng "máy tính")
@@ -137,6 +140,7 @@ function FormPhien({ dau, macDinh, xong, huy }: { dau: Phien | null; macDinh: { 
   const [giong, setGiong] = useState(dau?.giong ?? 'may')
   const [kichBan, setKichBan] = useState(dau?.kich_ban ?? '')
   const [anhMc, setAnhMc] = useState(dau?.anh_mc ?? '')
+  const [videoMc, setVideoMc] = useState<ClipMc[]>(dau?.video_mc ?? [])
   const [taiAnhMc, setTaiAnhMc] = useState(false)
   const [dangViet, viet] = useTransition()
   const [loiMoDau, setLoiMoDau] = useState(dau?.loi_mo_dau ?? '')
@@ -174,6 +178,7 @@ function FormPhien({ dau, macDinh, xong, huy }: { dau: Phien | null; macDinh: { 
         loiMoDau,
         kichBan,
         anhMc,
+        videoMc,
         thongTin,
         cachNoi,
         sanPham: sp.filter((x) => x.ten.trim()).map((x) => ({ ten: x.ten.trim(), gia: docTien(x.gia), anh: x.anh, mo_ta: x.mo_ta.trim() })),
@@ -333,6 +338,15 @@ function FormPhien({ dau, macDinh, xong, huy }: { dau: Phien | null; macDinh: { 
         />
         {kichBan.trim() && <span className="mt-1 block text-xs text-phu">{kichBan.split(/\n\s*\n/).filter((x) => x.trim()).length} đoạn</span>}
       </label>
+
+      <ThuVienVideo
+        clip={videoMc}
+        doi={setVideoMc}
+        tenShop={ten}
+        sanPham={sp.filter((x) => x.ten.trim()).map((x) => ({ ten: x.ten.trim(), gia: docTien(x.gia) }))}
+        anhMc={anhMc}
+        baoLoi={setLoi}
+      />
 
       <label className="block">
         <span className="text-sm font-medium">Lời mở đầu</span>
