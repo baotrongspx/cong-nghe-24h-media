@@ -6,7 +6,7 @@ import { GIONG } from '@/lib/giongDoc'
 import { layLinkTaiAnh } from '../dang-bai/actions'
 import { IAi, IChep, ICong, IMoNgoai, ISua, IXoa, IXong } from '../BieuTuong'
 import { NutHanhDong } from '../NutHanhDong'
-import { doiMaPhienLive, luuPhienLive, ngheThuGiong, xoaPhienLive } from './actions'
+import { doiMaPhienLive, luuPhienLive, ngheThuGiong, vietKichBanAi, xoaPhienLive } from './actions'
 
 export type SanPhamLive = { ten: string; gia: number; anh: string; mo_ta: string }
 export type Phien = {
@@ -19,6 +19,20 @@ export type Phien = {
   loi_mo_dau: string
   giong: string
   san_pham: SanPhamLive[]
+  kich_ban?: string
+}
+
+// Đọc thử bằng giọng tiếng Việt có sẵn trên máy (giọng "máy tính")
+function docBangMay(chu: string) {
+  const ds = speechSynthesis.getVoices()
+  const giong = ds.find((g) => /HoaiMy|NamMinh/i.test(g.name)) ?? ds.find((g) => g.lang.toLowerCase().startsWith('vi'))
+  if (!giong) return false
+  const u = new SpeechSynthesisUtterance(chu)
+  u.voice = giong
+  u.lang = giong.lang
+  speechSynthesis.cancel()
+  speechSynthesis.speak(u)
+  return true
 }
 
 const oNhap = 'w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-chinh focus:outline-none focus:ring-2 focus:ring-chinh/15'
@@ -52,22 +66,40 @@ function DongChep({ nhan, chu }: { nhan: string; chu: string }) {
 // Hướng dẫn lên live cho một phiên
 function HuongDan({ p, goc }: { p: Phien; goc: string }) {
   const linkSanKhau = `${goc}/live/${p.ma}`
-  const lenh = `node doc-binh-luan-tiktok.mjs ${goc}/api/live/${p.ma}/binh-luan ${p.tiktok || '<ten-tiktok>'}`
+  const lenh = `node live-ai-may.mjs ${goc}/api/live/${p.ma}/binh-luan ${p.tiktok || '<ten-tiktok>'}`
   const buoc: [string, React.ReactNode][] = [
     [
-      'Cài OBS Studio',
+      'Cài OBS Studio và Node.js (một lần)',
       <>
-        Tải miễn phí tại{' '}
+        Tải miễn phí{' '}
         <a href="https://obsproject.com" target="_blank" rel="noreferrer" className="text-chinh underline">
-          obsproject.com
+          OBS Studio
+        </a>{' '}
+        và{' '}
+        <a href="https://nodejs.org" target="_blank" rel="noreferrer" className="text-chinh underline">
+          Node.js
         </a>
-        . Vào Settings → Video, đặt Base và Output Resolution là <b>1080x1920</b> (màn hình dọc).
+        . Trong OBS vào Settings → Video, đặt Base và Output Resolution là <b>1080x1920</b> (màn hình dọc).
+      </>,
+    ],
+    [
+      'Chạy chương trình trên máy (đọc giọng + bình luận)',
+      <>
+        Tạo thư mục (vd. C:\live-ai), tải{' '}
+        <a href="/cong-cu/live-ai-may.mjs" download className="text-chinh underline">
+          live-ai-may.mjs
+        </a>{' '}
+        vào đó. Mở PowerShell trong thư mục, chạy một lần <code className="rounded bg-slate-100 px-1 font-mono text-xs">npm install tiktok-live-connector</code>, rồi chạy lệnh dưới. Chương
+        trình đọc lời MC bằng <b>giọng tiếng Việt của Windows</b> (miễn phí, không giới hạn) và gửi bình luận TikTok về phần mềm. Để cửa sổ mở suốt buổi live.
+        <div className="mt-2">
+          <DongChep nhan="Lệnh chạy" chu={lenh} />
+        </div>
       </>,
     ],
     [
       'Thêm sân khấu MC ảo vào OBS',
       <>
-        Sources → + → <b>Browser</b>, dán link sân khấu, Width 1080, Height 1920, tích <b>Control audio via OBS</b>. MC sẽ tự nói khi nguồn này được mở.
+        Sources → + → <b>Browser</b>, dán link sân khấu, Width 1080, Height 1920, tích <b>Control audio via OBS</b>. MC tự nói khi nguồn này được mở.
         <div className="mt-2">
           <DongChep nhan="Link sân khấu (giữ bí mật)" chu={linkSanKhau} />
         </div>
@@ -78,24 +110,6 @@ function HuongDan({ p, goc }: { p: Phien; goc: string }) {
       <>
         Lấy <b>Server URL</b> và <b>Stream Key</b> của TikTok (tài khoản đủ điều kiện phát live từ máy tính, hoặc qua TikTok LIVE Studio), dán vào OBS → Settings → Stream → Custom, rồi bấm{' '}
         <b>Start Streaming</b>.
-      </>,
-    ],
-    [
-      'Bật chương trình đọc bình luận',
-      <>
-        Cài{' '}
-        <a href="https://nodejs.org" target="_blank" rel="noreferrer" className="text-chinh underline">
-          Node.js
-        </a>
-        , tạo thư mục (vd. C:\live-ai), tải{' '}
-        <a href="/cong-cu/doc-binh-luan-tiktok.mjs" download className="text-chinh underline">
-          doc-binh-luan-tiktok.mjs
-        </a>{' '}
-        vào đó. Mở PowerShell trong thư mục, chạy một lần <code className="rounded bg-slate-100 px-1 font-mono text-xs">npm install tiktok-live-connector</code>, rồi chạy lệnh dưới khi
-        đang live.
-        <div className="mt-2">
-          <DongChep nhan="Lệnh chạy" chu={lenh} />
-        </div>
       </>,
     ],
   ]
@@ -119,7 +133,9 @@ type DongSp = { ten: string; gia: string; anh: string; mo_ta: string }
 function FormPhien({ dau, macDinh, xong, huy }: { dau: Phien | null; macDinh: { ten: string; thongTin: string }; xong: () => void; huy: () => void }) {
   const [ten, setTen] = useState(dau?.ten ?? macDinh.ten)
   const [tiktok, setTiktok] = useState(dau?.tiktok ?? '')
-  const [giong, setGiong] = useState(dau?.giong ?? 'Kore')
+  const [giong, setGiong] = useState(dau?.giong ?? 'may')
+  const [kichBan, setKichBan] = useState(dau?.kich_ban ?? '')
+  const [dangViet, viet] = useTransition()
   const [loiMoDau, setLoiMoDau] = useState(dau?.loi_mo_dau ?? '')
   const [thongTin, setThongTin] = useState(dau?.thong_tin ?? macDinh.thongTin)
   const [cachNoi, setCachNoi] = useState(dau?.cach_noi ?? '')
@@ -153,6 +169,7 @@ function FormPhien({ dau, macDinh, xong, huy }: { dau: Phien | null; macDinh: { 
         tiktok,
         giong,
         loiMoDau,
+        kichBan,
         thongTin,
         cachNoi,
         sanPham: sp.filter((x) => x.ten.trim()).map((x) => ({ ten: x.ten.trim(), gia: docTien(x.gia), anh: x.anh, mo_ta: x.mo_ta.trim() })),
@@ -195,6 +212,11 @@ function FormPhien({ dau, macDinh, xong, huy }: { dau: Phien | null; macDinh: { 
             disabled={dangNghe}
             onClick={() =>
               nghe(async () => {
+                if (giong === 'may') {
+                  if (!docBangMay('Chào cả nhà đã ghé live của shop! Hôm nay bên em có nhiều ưu đãi lắm, cả nhà thả tim ủng hộ em nha.'))
+                    setLoi('Máy này chưa có giọng tiếng Việt. Vào Cài đặt Windows → Thời gian và ngôn ngữ → Giọng nói → Thêm giọng → Tiếng Việt.')
+                  return
+                }
                 const r = await ngheThuGiong(giong)
                 if (r.ok) await new Audio(`data:audio/wav;base64,${r.amThanh}`).play()
                 else setLoi(r.thongBao)
@@ -232,6 +254,42 @@ function FormPhien({ dau, macDinh, xong, huy }: { dau: Phien | null; macDinh: { 
           <ICong className="h-4 w-4" /> Thêm sản phẩm
         </button>
       </fieldset>
+
+      <label className="block">
+        <span className="flex items-end justify-between gap-2">
+          <span>
+            <span className="text-sm font-medium">Kịch bản đọc</span>
+            <span className="block text-xs text-phu">
+              Khi không có bình luận, MC đọc lần lượt từng đoạn rồi lặp lại, không tốn lượt AI. Mỗi đoạn cách nhau một dòng trống. Để trống thì AI tự nghĩ lời (tốn lượt).
+            </span>
+          </span>
+          <button
+            type="button"
+            disabled={dangViet}
+            onClick={() =>
+              viet(async () => {
+                if (kichBan.trim() && !confirm('Thay kịch bản đang có bằng kịch bản AI viết?')) return
+                const r = await vietKichBanAi({ ten, thongTin, cachNoi, sanPham: sp.filter((x) => x.ten.trim()).map((x) => ({ ten: x.ten, gia: docTien(x.gia), mo_ta: x.mo_ta })) })
+                if (r.ok) setKichBan(r.kichBan)
+                else setLoi(r.thongBao)
+              })
+            }
+            className="inline-flex shrink-0 items-center gap-1 rounded-md border border-violet-300 bg-violet-50 px-2.5 py-1 text-xs font-medium text-violet-700 hover:bg-violet-100 disabled:opacity-50"
+          >
+            <IAi className="h-3.5 w-3.5" /> {dangViet ? 'AI đang viết…' : 'AI viết kịch bản'}
+          </button>
+        </span>
+        <textarea
+          value={kichBan}
+          onChange={(e) => setKichBan(e.target.value)}
+          rows={10}
+          placeholder={
+            'Chào cả nhà đã ghé live của shop! Hôm nay bên em có nhiều ưu đãi lắm.\n\nĐây là Galaxy Tab S12 Ultra, màn hình mười bốn phẩy sáu inch, giá hai mươi tám triệu chín.\n\nCả nhà thả tim, bấm theo dõi kênh để không bỏ lỡ ưu đãi nha!'
+          }
+          className={`${oNhap} mt-1 resize-y`}
+        />
+        {kichBan.trim() && <span className="mt-1 block text-xs text-phu">{kichBan.split(/\n\s*\n/).filter((x) => x.trim()).length} đoạn</span>}
+      </label>
 
       <label className="block">
         <span className="text-sm font-medium">Lời mở đầu</span>

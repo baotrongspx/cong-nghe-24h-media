@@ -368,3 +368,6 @@ create table if not exists live_binh_luan (
 create index if not exists live_binh_luan_phien on live_binh_luan (phien_id, id desc);
 alter table phien_live enable row level security;
 alter table live_binh_luan enable row level security;
+-- Kịch bản đọc sẵn (các đoạn cách nhau bằng dòng trống): không có bình luận thì MC đọc lần lượt, không tốn lượt AI
+alter table phien_live add column if not exists kich_ban text not null default '';
+alter table phien_live alter column giong set default 'may';

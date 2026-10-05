@@ -4,12 +4,61 @@ import { useEffect, useRef, useState } from 'react'
 import NhanVatAo from './NhanVatAo'
 
 type SanPham = { ten: string; gia: number; anh: string; mo_ta: string }
-type Luot = { loiNoi: string; sanPham: number; traLoiCho: string[]; amThanh: string }
+type Luot = { loiNoi: string; sanPham: number; traLoiCho: string[]; amThanh: string; doanSo: number; canhBao?: string }
 type BinhLuan = { id: number; ten: string; noi_dung: string }
 
 const tien = (n: number) => `${n.toLocaleString('vi-VN')}đ`
 const ngu = (ms: number) => new Promise((r) => setTimeout(r, ms))
 const giaiMa = (b64: string) => Uint8Array.from(atob(b64), (c) => c.charCodeAt(0)).buffer
+
+// Giọng tiếng Việt có sẵn trên máy (ưu tiên giọng tự nhiên HoaiMy / NamMinh nếu có)
+async function chonGiongMay() {
+  let ds = speechSynthesis.getVoices()
+  if (!ds.length) {
+    await new Promise((r) => {
+      speechSynthesis.addEventListener('voiceschanged', r, { once: true })
+      setTimeout(r, 1500)
+    })
+    ds = speechSynthesis.getVoices()
+  }
+  return ds.find((g) => /HoaiMy|NamMinh/i.test(g.name)) ?? ds.find((g) => g.lang.toLowerCase().startsWith('vi')) ?? null
+}
+
+// Nhờ chương trình live-ai-may.mjs trên máy đọc thành giọng (WAV). Không chạy thì trả null.
+async function giongTrenMay(chu: string): Promise<ArrayBuffer | null> {
+  try {
+    const r = await fetch('http://127.0.0.1:5123/doc', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ chu }),
+      signal: AbortSignal.timeout(20_000),
+    })
+    return r.ok ? await r.arrayBuffer() : null
+  } catch {
+    return null
+  }
+}
+
+// Đọc bằng giọng máy, từng câu một (Chrome hay tự dừng khi đọc câu quá dài)
+async function docBangMay(chu: string, giong: SpeechSynthesisVoice | null, dung: () => boolean) {
+  const cau = chu.split(/(?<=[.!?…])\s+/).filter((x) => x.trim())
+  for (const c of cau) {
+    if (dung()) return
+    await new Promise<void>((xong) => {
+      const u = new SpeechSynthesisUtterance(c)
+      if (giong) u.voice = giong
+      u.lang = giong?.lang ?? 'vi-VN'
+      u.rate = 1.05
+      let roi = false
+      const het = () => !roi && ((roi = true), xong())
+      u.onend = het
+      u.onerror = het
+      // Dự phòng khi trình duyệt không báo đọc xong
+      setTimeout(het, c.length * 110 + 2500)
+      speechSynthesis.speak(u)
+    })
+  }
+}
 
 // Sân khấu 9:16 (OBS: Browser source 1080 × 1920). Mọi kích thước theo cqh để co giãn đúng tỉ lệ.
 export default function SanKhau({ ma, ten, sanPham }: { ma: string; ten: string; sanPham: SanPham[] }) {
@@ -32,11 +81,19 @@ export default function SanKhau({ ma, ten, sanPham }: { ma: string; ten: string;
     phanTich.connect(ctx.destination)
     const mau = new Uint8Array(phanTich.fftSize)
     let raf = 0
+    let docMay = false // đang đọc bằng giọng máy: không đo được âm lượng, nhép miệng giả lập
     const ve = () => {
-      phanTich.getByteTimeDomainData(mau)
-      let tong = 0
-      for (const v of mau) tong += ((v - 128) / 128) ** 2
-      goc.current?.style.setProperty('--m', Math.min(1, Math.sqrt(tong / mau.length) * 7).toFixed(2))
+      let m: number
+      if (docMay) {
+        const t = performance.now() / 1000
+        m = Math.max(0, 0.15 + 0.45 * Math.abs(Math.sin(t * 9)) * (0.6 + 0.4 * Math.sin(t * 2.3)))
+      } else {
+        phanTich.getByteTimeDomainData(mau)
+        let tong = 0
+        for (const v of mau) tong += ((v - 128) / 128) ** 2
+        m = Math.min(1, Math.sqrt(tong / mau.length) * 7)
+      }
+      goc.current?.style.setProperty('--m', m.toFixed(2))
       raf = requestAnimationFrame(ve)
     }
     ve()
@@ -44,6 +101,8 @@ export default function SanKhau({ ma, ten, sanPham }: { ma: string; ten: string;
     const daNoi: string[] = []
     let spTruoc = 0
     let dauTien = true
+    let doanTruoc = 0
+    const giongMay = chonGiongMay()
     // Trả null khi sân khấu đã dừng
     const xin = async (): Promise<Luot | null> => {
       for (;;) {
@@ -52,7 +111,7 @@ export default function SanKhau({ ma, ten, sanPham }: { ma: string; ten: string;
           const r = await fetch(`/api/live/${ma}/luot`, {
             method: 'POST',
             headers: { 'content-type': 'application/json' },
-            body: JSON.stringify({ spTruoc, daNoi: daNoi.slice(-3), dauTien }),
+            body: JSON.stringify({ spTruoc, daNoi: daNoi.slice(-3), dauTien, doanTruoc }),
           })
           const j = await r.json()
           if (!r.ok) throw new Error(j.loi ?? `Lỗi ${r.status}`)
@@ -76,13 +135,33 @@ export default function SanKhau({ ma, ten, sanPham }: { ma: string; ten: string;
         if (!luot || dung) break
         dauTien = false
         if (luot.sanPham) spTruoc = luot.sanPham
+        if (luot.doanSo) doanTruoc = luot.doanSo
+        if (luot.canhBao) console.warn('Giọng Gemini lỗi, dùng giọng máy:', luot.canhBao)
         daNoi.push(luot.loiNoi)
         setLoi('')
         setCau(luot.loiNoi)
         setDangTraLoi(luot.traLoiCho)
         if (luot.sanPham) setSp(luot.sanPham)
+        // Không có âm thanh từ máy chủ (chọn giọng máy, hoặc giọng Gemini hết lượt): máy tự đọc
+        // Âm thanh: từ máy chủ (giọng Gemini), hoặc nhờ chương trình trên máy đọc (giọng Windows, dùng được trong OBS)
+        const duLieu = luot.amThanh ? giaiMa(luot.amThanh) : await giongTrenMay(luot.loiNoi)
+        if (!duLieu) {
+          // Không có chương trình trên máy: trình duyệt tự đọc (Chrome / Edge; OBS không đọc được kiểu này)
+          let daXin = false
+          const hen = setTimeout(() => {
+            daXin = true
+            tiep = xin()
+          }, Math.max(0, (luot.loiNoi.length / 14 - 7) * 1000))
+          docMay = true
+          await docBangMay(luot.loiNoi, await giongMay, () => dung)
+          docMay = false
+          clearTimeout(hen)
+          if (!daXin) tiep = xin()
+          await ngu(500)
+          continue
+        }
         try {
-          const buf = await ctx.decodeAudioData(giaiMa(luot.amThanh))
+          const buf = await ctx.decodeAudioData(duLieu)
           const nguon = ctx.createBufferSource()
           nguon.buffer = buf
           nguon.connect(phanTich)
@@ -107,6 +186,7 @@ export default function SanKhau({ ma, ten, sanPham }: { ma: string; ten: string;
 
     return () => {
       dung = true
+      speechSynthesis.cancel()
       cancelAnimationFrame(raf)
       ctx.close().catch(() => {})
     }
