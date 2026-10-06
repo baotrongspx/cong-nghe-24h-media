@@ -36,7 +36,7 @@ function boc(pcm: Buffer) {
   return Buffer.concat([h, pcm])
 }
 
-export async function docThanhGiong(chu: string, giong = 'Kore'): Promise<string> {
+export async function docThanhGiong(chu: string, giong = 'Kore', cho = 40_000): Promise<string> {
   const khoa = process.env.GEMINI_API_KEY?.trim()
   if (!khoa) throw new Error('Chưa cài GEMINI_API_KEY')
   const res = await fetch('https://generativelanguage.googleapis.com/v1beta/interactions', {
@@ -48,7 +48,7 @@ export async function docThanhGiong(chu: string, giong = 'Kore'): Promise<string
       response_format: { type: 'audio' },
       generation_config: { speech_config: [{ voice: giong }] },
     }),
-    signal: AbortSignal.timeout(40_000),
+    signal: AbortSignal.timeout(cho),
     cache: 'no-store',
   })
   const json = await res.json().catch(() => ({}))

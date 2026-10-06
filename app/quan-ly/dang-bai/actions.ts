@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto'
 import { revalidatePath } from 'next/cache'
 import { db } from '@/lib/db'
 import { LoiFacebook, dangBaiTrang, taiAnhLenTrang, xoaBaiTrang } from '@/lib/facebook'
+import { GIONG, docThanhGiong } from '@/lib/giongNoi'
 import { batBuocDangNhap } from '@/lib/phien'
 
 const KHO_ANH = 'anh-bai-viet'
@@ -77,6 +78,29 @@ export async function taoBaiViet(_truoc: KetQua | null, form: FormData): Promise
   return {
     ok: true,
     thongBao: !trang.length ? 'Đã lưu bài vào thư viện.' : henLuc ? `Đã hẹn giờ đăng lên ${trang.length} Page.` : `Đã đăng lên ${trang.length} Page.`,
+  }
+}
+
+// ---- Video TikTok lồng tiếng AI ----
+// Bỏ link, hashtag, emoji để AI chỉ đọc phần chữ (phụ đề cũng dùng bản này)
+const chuDeDoc = (s: string) =>
+  s
+    .replace(/https?:\/\/\S+/g, '')
+    .replace(/#[\p{L}\p{N}_]+/gu, '')
+    .replace(/[\p{Extended_Pictographic}\u{FE0F}\u{200D}]/gu, '')
+    .replace(/[ \t]+/g, ' ')
+    .replace(/\s*\n\s*/g, '\n')
+    .trim()
+
+export async function docBaiThanhGiong(noiDung: string, giong: string): Promise<{ ok: true; amThanh: string; chu: string } | { ok: false; thongBao: string }> {
+  await batBuocDangNhap()
+  if (!GIONG.some(([ma]) => ma === giong) || giong === 'may') return { ok: false, thongBao: 'Giọng không hợp lệ' }
+  const chu = chuDeDoc(noiDung).slice(0, 1200)
+  if (!chu) return { ok: false, thongBao: 'Bài viết chưa có nội dung chữ để đọc' }
+  try {
+    return { ok: true, amThanh: await docThanhGiong(chu, giong, 90_000), chu }
+  } catch (e) {
+    return { ok: false, thongBao: e instanceof Error ? e.message : 'Lỗi tạo giọng đọc' }
   }
 }
 

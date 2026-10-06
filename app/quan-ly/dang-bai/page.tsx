@@ -5,6 +5,7 @@ import { batBuocDangNhap } from '@/lib/phien'
 import { NutHanhDong } from '../NutHanhDong'
 import { huyHenGio, xoaBaiViet } from './actions'
 import SoanBai from './SoanBai'
+import VideoTikTok from './VideoTikTok'
 
 type Bai = {
   id: string
@@ -96,6 +97,14 @@ export default async function DangBai() {
                       )
                     })}
                   </ul>
+                )}
+                {b.noi_dung && (
+                  <details className="mt-3 border-t border-slate-100 pt-2">
+                    <summary className="cursor-pointer text-sm font-semibold text-chinh">Tạo video TikTok lồng tiếng AI</summary>
+                    <div className="mt-2">
+                      <VideoTikTok noiDung={b.noi_dung} anh={b.anh} />
+                    </div>
+                  </details>
                 )}
                 <div className="mt-3 flex gap-4 border-t border-slate-100 pt-2 text-sm">
                   <Link href={`/quan-ly/dang-nhom?bai=${b.id}`} className="font-semibold text-chinh hover:underline">
