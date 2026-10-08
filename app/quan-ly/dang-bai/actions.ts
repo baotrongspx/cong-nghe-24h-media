@@ -81,7 +81,7 @@ export async function taoBaiViet(_truoc: KetQua | null, form: FormData): Promise
   }
 }
 
-// ---- Video TikTok lồng tiếng AI ----
+// ---- Video lồng tiếng AI (TikTok, YouTube) ----
 // Bỏ link, hashtag, emoji để AI chỉ đọc phần chữ (phụ đề cũng dùng bản này)
 const chuDeDoc = (s: string) =>
   s

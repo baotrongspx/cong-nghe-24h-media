@@ -2,7 +2,7 @@
 
 import { useActionState, useState } from 'react'
 import { layLinkTaiAnh, taoBaiViet, type KetQua } from './actions'
-import VideoTikTok from './VideoTikTok'
+import VideoLongTieng from './VideoLongTieng'
 
 export default function SoanBai({ trang }: { trang: { id: string; ten: string }[] }) {
   const [noiDung, setNoiDung] = useState('')
@@ -104,7 +104,7 @@ export default function SoanBai({ trang }: { trang: { id: string; ten: string }[
       </div>
       {loiAnh && <p className="text-sm text-red-600">{loiAnh}</p>}
 
-      <VideoTikTok noiDung={noiDung} anh={anh} />
+      <VideoLongTieng noiDung={noiDung} anh={anh} />
 
       <div>
         <p className="text-sm font-semibold">Đăng lên Fanpage</p>
