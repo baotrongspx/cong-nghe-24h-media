@@ -19,7 +19,7 @@ export async function nhapMatKhau(_truoc: string | null, form: FormData): Promis
 
 export type NhanVatAi = { ten: string; moTa: string; tinhCach: string; giong: string }
 export type BoiCanhAi = { ten: string; moTa: string }
-export type CanhAi = { boiCanh: string; nhanVat: string[]; hanhDong: string; loi: string; hinh: string }
+export type CanhAi = { boiCanh: string; nhanVat: string[]; viTri: string; hanhDong: string; loi: string; hinh: string }
 export type VideoAi = { dienBien: { tu: number; den: number; viec: string }[]; mayQuay: string; amThanh: string }
 type KetQua<T> = ({ ok: true } & T) | { ok: false; thongBao: string }
 
@@ -45,7 +45,7 @@ const CAM_CHUNG = 'Không dùng tên, hình ảnh của người thật, ngườ
 const HE_NV = `Bạn là AGENT THIẾT KẾ NHÂN VẬT cho phim hoạt hình 2D chibi, thể loại hài đời thường Việt Nam.
 Từ ý chính câu chuyện, lập danh sách nhân vật cần có (2-5 người). Nhân vật đã có sẵn thì GIỮ NGUYÊN tên và mô tả, chỉ thêm người còn thiếu, bỏ người không xuất hiện trong chuyện.
 Với mỗi nhân vật:
-- moTa: ngoại hình CỐ ĐỊNH, cụ thể để AI vẽ lại y hệt ở mọi cảnh: giới tính, tuổi, dáng người, khuôn mặt, kiểu tóc và màu tóc, quần áo với màu cụ thể, giày dép, một chi tiết nhận diện riêng. 1-2 câu, không dùng từ mơ hồ như "đẹp", "bình thường".
+- moTa: ngoại hình CỐ ĐỊNH, cụ thể để AI vẽ lại y hệt ở mọi cảnh: giới tính, tuổi, dáng người, khuôn mặt, có đeo kính không (kiểu kính), kiểu tóc và màu tóc, dây buộc tóc nếu có, quần áo (kiểu áo, cổ áo, tay dài hay ngắn) với màu có sắc độ rõ (ví dụ "xanh bạc hà nhạt", "cam đậm", không chỉ "xanh"), quần, giày dép, một chi tiết nhận diện riêng. 1-2 câu, không dùng từ mơ hồ như "đẹp", "bình thường".
 - tinhCach: tính cách và vai trò trong chuyện, 1 câu.
 - giong: giọng nói để AI video lồng tiếng (nam hay nữ, tuổi, nhịp nói, sắc thái), 1 câu ngắn.
 Hai nhân vật phải khác nhau rõ ở dáng, tóc và màu quần áo. ${CAM_CHUNG}`
@@ -84,6 +84,7 @@ Quy tắc:
 - Cấu trúc cả mẩu: câu mở gây tò mò → tình huống → sự cố → leo thang → cú lật bất ngờ → câu chốt. Chi tiết cài ở đầu phải được trả lại ở cuối.
 - bo_canh: tên ngắn của nơi diễn ra (ví dụ "Phòng khách nhà Tí"). Quay lại nơi cũ thì dùng ĐÚNG tên cũ. Cả mẩu chỉ nên có 2-4 bối cảnh.
 - nhan_vat: tên các nhân vật có mặt, đúng tên trong danh sách, tối đa 3 người một cảnh.
+- vi_tri: ai đứng bên trái, ở giữa, bên phải màn hình và quay mặt về hướng nào. Hai nhân vật đã đứng trái/phải ở một bối cảnh thì GIỮ NGUYÊN bên đó trong mọi cảnh tiếp theo ở bối cảnh ấy (không đổi chỗ, không vượt trục), trừ khi hành động bắt buộc có người đi sang.
 - hanh_dong: chuyện xảy ra trong ${giay} giây, chỉ 1-2 hành động cụ thể nhìn thấy được.
 - loi: lời thoại trong cảnh, mỗi câu một dòng dạng "Tên: câu nói". Tổng tối đa ${soTu} từ để nói kịp trong ${giay} giây. Để trống nếu cảnh chỉ có hành động.
 - hinh: khung hình ĐẦU TIÊN của cảnh để vẽ ảnh tĩnh: ai đứng đâu (trái, giữa, phải), tư thế, biểu cảm, cỡ cảnh. Gọi nhân vật bằng tên, không tả lại ngoại hình hay quần áo.
@@ -96,7 +97,7 @@ export async function agentKichBan(yChinh: string, soCanh: number, giay: number,
   const g = giay === 10 ? 10 : 8
   const so = Math.min(14, Math.max(3, Math.round(soCanh) || 8))
   const ds = nhanVat.filter((n) => n.ten.trim()).map((n) => `- ${n.ten}: ${n.tinhCach || n.moTa}`).join('\n')
-  const r = await goiAgent<{ ten?: string; canh?: { bo_canh?: string; nhan_vat?: string[]; hanh_dong?: string; loi?: string; hinh?: string }[] }>(
+  const r = await goiAgent<{ ten?: string; canh?: { bo_canh?: string; nhan_vat?: string[]; vi_tri?: string; hanh_dong?: string; loi?: string; hinh?: string }[] }>(
     HE_KB(g, g === 10 ? 24 : 18),
     `Nhân vật:\n${ds || '(chưa có, hãy tự đặt 2-3 nhân vật)'}\n\nÝ chính câu chuyện:\n${y}\n\nViết đúng ${so} cảnh.`,
     {
@@ -107,8 +108,8 @@ export async function agentKichBan(yChinh: string, soCanh: number, giay: number,
           type: 'ARRAY',
           items: {
             type: 'OBJECT',
-            properties: { bo_canh: S({}), nhan_vat: { type: 'ARRAY', items: S({}) }, hanh_dong: S({}), loi: S({}), hinh: S({}) },
-            required: ['bo_canh', 'nhan_vat', 'hanh_dong', 'loi', 'hinh'],
+            properties: { bo_canh: S({}), nhan_vat: { type: 'ARRAY', items: S({}) }, vi_tri: S({}), hanh_dong: S({}), loi: S({}), hinh: S({}) },
+            required: ['bo_canh', 'nhan_vat', 'vi_tri', 'hanh_dong', 'loi', 'hinh'],
           },
         },
       },
@@ -121,6 +122,7 @@ export async function agentKichBan(yChinh: string, soCanh: number, giay: number,
     .map((c) => ({
       boiCanh: cat(c.bo_canh, 80),
       nhanVat: (c.nhan_vat ?? []).map((x) => cat(x, 40)).filter(Boolean).slice(0, 4),
+      viTri: cat(c.vi_tri, 200),
       hanhDong: cat(c.hanh_dong, 500),
       loi: cat(c.loi, 500),
       hinh: cat(c.hinh, 600),
@@ -161,6 +163,8 @@ Nguyên tắc: không khen xã giao, không nói chung chung; mỗi lỗi phải
 Ràng buộc khi viết lại canh_moi (thể loại hài đời thường 2D chibi, giữ nguyên thể loại):
 - Mỗi cảnh là một đoạn video ${giay} giây liền mạch. Câu mở đầu phải gây tò mò ngay trong 5 giây đầu; xung đột đưa vào sớm; mỗi cảnh phải đẩy chuyện đi tiếp hoặc gây cười; có cú lật và câu chốt.
 - Chỉ dùng nhân vật trong danh sách; bo_canh dùng lại tên cũ, tổng 2-4 bối cảnh; thay đổi cỡ cảnh (toàn, trung, cận, đặc tả) giữa các cảnh.
+- vi_tri: ai đứng bên trái, ở giữa, bên phải màn hình và quay mặt về hướng nào. Hai nhân vật đã đứng trái/phải ở một bối cảnh thì GIỮ NGUYÊN bên đó trong mọi cảnh tiếp theo ở bối cảnh ấy (không đổi chỗ, không vượt trục), trừ khi hành động bắt buộc có người đi sang.
+- Cảnh sau ở cùng bối cảnh phải bắt đầu đúng từ tư thế và vị trí cuối của cảnh trước (nối tiếp liền mạch).
 - loi: mỗi câu một dòng "Tên: câu nói", tổng tối đa ${soTu} từ một cảnh. hanh_dong: 1-2 hành động nhìn thấy được. hinh: khung hình đầu, gọi nhân vật bằng tên, không tả lại ngoại hình.
 - Số cảnh có thể bớt nếu cắt cảnh thừa, không thêm quá 2 cảnh.
 Không dùng người thật, nhãn hiệu thật. Viết tiếng Việt có dấu đầy đủ.`
@@ -193,7 +197,7 @@ export async function agentDaoDien(
     tiem_nang?: string
     ke_hoach?: string[]
     video_tiep?: string[]
-    canh_moi?: { bo_canh?: string; nhan_vat?: string[]; hanh_dong?: string; loi?: string; hinh?: string }[]
+    canh_moi?: { bo_canh?: string; nhan_vat?: string[]; vi_tri?: string; hanh_dong?: string; loi?: string; hinh?: string }[]
   }>(
     HE_DD(g, g === 10 ? 24 : 18),
     `Tên mẩu: ${cat(ten, 100) || '(chưa đặt)'}\n\nNhân vật:\n${nhanVat.filter((n) => n.ten.trim()).map((n) => `- ${n.ten}: ${n.tinhCach || n.moTa}`).join('\n')}\n\nKịch bản hiện tại:\n${ds}`,
@@ -230,8 +234,8 @@ export async function agentDaoDien(
           type: 'ARRAY',
           items: {
             type: 'OBJECT',
-            properties: { bo_canh: S({}), nhan_vat: mang, hanh_dong: S({}), loi: S({}), hinh: S({}) },
-            required: ['bo_canh', 'nhan_vat', 'hanh_dong', 'loi', 'hinh'],
+            properties: { bo_canh: S({}), nhan_vat: mang, vi_tri: S({}), hanh_dong: S({}), loi: S({}), hinh: S({}) },
+            required: ['bo_canh', 'nhan_vat', 'vi_tri', 'hanh_dong', 'loi', 'hinh'],
           },
         },
       },
@@ -246,6 +250,7 @@ export async function agentDaoDien(
     .map((c) => ({
       boiCanh: cat(c.bo_canh, 80),
       nhanVat: (c.nhan_vat ?? []).map((x) => cat(x, 40)).filter(Boolean).slice(0, 4),
+      viTri: cat(c.vi_tri, 200),
       hanhDong: cat(c.hanh_dong, 500),
       loi: cat(c.loi, 500),
       hinh: cat(c.hinh, 600),
@@ -312,17 +317,17 @@ Với mỗi cảnh (giữ đúng số "so"):
 - dien_bien: 3-4 mốc thời gian liền nhau phủ kín từ 0 đến ${giay} giây. Mỗi mốc tả chính xác cử động nhìn thấy: ai, bộ phận nào, làm gì, biểu cảm ra sao. Khớp lời thoại: ai đang nói thì miệng người đó cử động, người kia phản ứng.
 - may_quay: một câu về cỡ cảnh và chuyển động máy (đứng yên, đẩy chậm vào, lia nhẹ...). Không cắt cảnh, không đổi góc đột ngột.
 - am_thanh: tiếng nền và tiếng động cụ thể của cảnh. Không nhạc có lời.
-Chỉ dùng những gì có trong cảnh: không thêm nhân vật, đồ vật hay nơi chốn mới, không đổi quần áo. Hành động nhỏ, vừa sức ${giay} giây. Tiếng Việt có dấu.`
+Chỉ dùng những gì có trong cảnh: không thêm nhân vật, đồ vật hay nơi chốn mới, không đổi quần áo, nhân vật giữ đúng bên trái / phải như phần Vị trí. Mốc cuối cùng phải dừng ở tư thế mà cảnh sau (nếu cùng bối cảnh) có thể bắt đầu. Hành động nhỏ, vừa sức ${giay} giây. Tiếng Việt có dấu.`
 
 export async function agentVideo(
   giay: number,
-  canh: { boiCanh: string; nhanVat: string[]; hanhDong: string; loi: string; hinh: string }[],
+  canh: { boiCanh: string; nhanVat: string[]; viTri: string; hanhDong: string; loi: string; hinh: string }[],
 ): Promise<KetQua<{ video: (VideoAi | null)[] }>> {
   const g = giay === 10 ? 10 : 8
   if (!canh.length) return { ok: false, thongBao: 'Chưa có cảnh nào, hãy chạy agent kịch bản trước' }
   const ds = canh
     .slice(0, 20)
-    .map((c, i) => `Cảnh so=${i + 1}\n- Bối cảnh: ${cat(c.boiCanh, 80)}\n- Nhân vật: ${c.nhanVat.join(', ') || '(không rõ)'}\n- Khung đầu: ${cat(c.hinh, 400)}\n- Hành động: ${cat(c.hanhDong, 400)}\n- Lời thoại: ${cat(c.loi, 400) || '(không có)'}`)
+    .map((c, i) => `Cảnh so=${i + 1}\n- Bối cảnh: ${cat(c.boiCanh, 80)}\n- Nhân vật: ${c.nhanVat.join(', ') || '(không rõ)'}\n- Vị trí: ${cat(c.viTri, 200) || '(không rõ)'}\n- Khung đầu: ${cat(c.hinh, 400)}\n- Hành động: ${cat(c.hanhDong, 400)}\n- Lời thoại: ${cat(c.loi, 400) || '(không có)'}`)
     .join('\n\n')
   const r = await goiAgent<{ canh?: { so?: number; dien_bien?: { tu?: number; den?: number; viec?: string }[]; may_quay?: string; am_thanh?: string }[] }>(
     HE_VD(g),
