@@ -16,17 +16,32 @@ export async function goiGeminiJson(
 ): Promise<string> {
   const khoa = process.env.GEMINI_API_KEY?.trim()
   if (!khoa) throw new Error('Chưa cài GEMINI_API_KEY')
-  // Thử lần lượt các mô hình mạnh hơn được yêu cầu; mô hình nào không có thì lùi về mô hình kế tiếp, cuối cùng là mô hình mặc định
-  const ds = [...moHinh.filter(Boolean), MODEL()]
-  for (let i = 0; i < ds.length - 1; i++) {
-    try {
-      return await goiMot(ds[i], khoa, heThong, contents, schema, temperature, cho)
-    } catch (e) {
-      if (!(e instanceof Error) || !/not found|not supported|404|unknown name|is not available/i.test(e.message)) throw e
+  // Thử lần lượt: mô hình được yêu cầu → mô hình mặc định → mô hình dự phòng.
+  // Mô hình không có thì bỏ qua; Google báo quá tải (503/429) thì chờ một nhịp, thử lại, rồi chuyển mô hình khác.
+  const ds = [...new Set([...moHinh.filter(Boolean), MODEL(), ...DU_PHONG])]
+  const het = Date.now() + cho
+  let loiCuoi: unknown = null
+  for (const m of ds) {
+    for (let lan = 0; lan < 2; lan++) {
+      const con = het - Date.now()
+      if (con < 4000) break
+      try {
+        return await goiMot(m, khoa, heThong, contents, schema, temperature, con)
+      } catch (e) {
+        loiCuoi = e
+        const tb = e instanceof Error ? e.message : ''
+        if (/not found|not supported|404|unknown name|is not available/i.test(tb)) break
+        if (!/high demand|overloaded|unavailable|503|429|resource.?exhausted|rate|quota|try again/i.test(tb)) throw e
+        await new Promise((xong) => setTimeout(xong, 1500 + lan * 2000))
+      }
     }
   }
-  return goiMot(ds[ds.length - 1], khoa, heThong, contents, schema, temperature, cho)
+  const tb = loiCuoi instanceof Error ? loiCuoi.message : ''
+  throw new Error(/high demand|overloaded|unavailable|503|429|exhausted|quota/i.test(tb) ? 'Máy chủ Gemini của Google đang quá tải, đã thử lại nhiều lần. Đợi 1-2 phút rồi bấm lại nhé.' : tb || 'Gemini lỗi')
 }
+
+// Mô hình dự phòng khi mô hình chính quá tải
+const DU_PHONG = ['gemini-2.5-flash-lite', 'gemini-2.5-flash', 'gemini-3-flash']
 
 async function goiMot(
   moHinh: string,
