@@ -338,6 +338,12 @@ Quy tắc dàn dựng:
 6. Góc máy có chủ đích: mở đầu mỗi khu vực bằng toan hoặc rat_rong; đối thoại xen trung, can, qua_vai; khoảnh khắc sốc dùng dac_ta hoặc day_vao; nhân vật yếu thế goc_cao, oai vệ goc_thap; người chạy dùng lia; kết phim keo_ra.
 7. Hiệu ứng chỉ dùng khi đúng cảm xúc (mồ hôi khi bối rối, tim khi yêu, khói khi tức...). Khoảng một nửa số dòng có hành động, không lạm dụng.
 8. Dòng chỉ có hành động, không lời: loi = "" và dien = người làm.
+11. DIỄN BẰNG HÀNH ĐỘNG, không để nhân vật chỉ đứng nói. Mỗi việc trong truyện phải được làm ra bằng hành động tương tác có đủ trình tự, máy tự diễn các bước chuẩn bị - tiếp cận - chạm - làm - kết thúc:
+   goi_dien (áp điện thoại lên tai), xem_dien_thoai (cúi nhìn màn hình), deo_tai_nghe / thao_tai_nghe, uong (nâng cốc lên miệng), an,
+   mo_cua / dong_cua, ra_cua (đi ra khỏi phòng qua cửa), vao_cua (bước vào qua cửa), ngoi_ghe / dung_day, go_may_tinh (ngồi gõ laptop),
+   bat_den / tat_den (phòng sáng hoặc tối hẳn), dat_len_ban (đặt đồ đang cầm lên bàn), cam / dat / dua.
+   Nhân vật mới xuất hiện trong phòng thì nên vao_cua; rời phòng thì ra_cua. Gọi điện thì goi_dien chứ không chỉ cầm điện thoại.
+12. Với mỗi dòng có hành động, ghi vào phan_tich một câu ngắn: nhân vật muốn làm gì → chạm vào đồ gì → kết quả. Hành động phải khớp đúng với lời nói và lời kể của dòng đó.
 10. Đi xe: người lái "lai" một xe trong danh sách XE CHỞ NGƯỜI, người đi cùng "ngoi_xe" với doi_tuong = tên người lái, rồi người lái "di" hoặc "chay" là cả xe chạy; tới nơi thì người lái "xuong_xe". Đổi khu vực thì tự xuống xe.
 9. loai nhân vật: nam, nu hoặc gia (người già).
 ${CAM_CHUNG}`
@@ -360,9 +366,9 @@ export async function agentLamPhimMay(phim: { ten: string; nhanVat: { ten: strin
             type: 'OBJECT',
             properties: {
               canh: S({ enum: [...DS_KHU_2D] }), anh_sang: S({ enum: Object.keys(ANH_SANG_2D) }), thoi_tiet: S({ enum: Object.keys(THOI_TIET_2D) }),
-              ai: S({}), dien: S({}), hanh_dong: S({}), doi_tuong: S({}), hieu_ung: S({}), may_quay: S({}), loi: S({}),
+              ai: S({}), dien: S({}), phan_tich: S({}), hanh_dong: S({}), doi_tuong: S({}), hieu_ung: S({}), may_quay: S({}), loi: S({}),
             },
-            required: ['canh', 'anh_sang', 'thoi_tiet', 'ai', 'dien', 'hanh_dong', 'doi_tuong', 'hieu_ung', 'may_quay', 'loi'],
+            required: ['canh', 'anh_sang', 'thoi_tiet', 'ai', 'dien', 'phan_tich', 'hanh_dong', 'doi_tuong', 'hieu_ung', 'may_quay', 'loi'],
           },
         },
       },
@@ -401,13 +407,13 @@ export async function agentLamPhimMay(phim: { ten: string; nhanVat: { ten: strin
     canhTruoc = canhNay
     // máy sẽ báo lỗi nếu thiếu: bỏ những hành động không đủ thông tin thay vì làm hỏng cả kịch bản
     const xeCuaLai = dangLai.get(doiTuong)
-    if (!dien || (hanhDong === 'cam' && !doiTuong) || (hanhDong === 'dua' && (!doiTuong || !dangCam.get(dien))) || (hanhDong === 'dat' && !dangCam.get(dien)) ||
+    if (!dien || (hanhDong === 'cam' && !doiTuong) || (hanhDong === 'dua' && (!doiTuong || !dangCam.get(dien))) || ((hanhDong === 'dat' || hanhDong === 'dat_len_ban') && !dangCam.get(dien)) ||
       (hanhDong === 'lai' && !doiTuong) || (hanhDong === 'ngoi_xe' && (!xeCuaLai || !DAO_CU_2D[xeCuaLai]?.cho_khach)) || (hanhDong === 'xuong_xe' && !dangLai.has(dien) && !dangNgoi.has(dien))) {
       hanhDong = ''
       doiTuong = ''
     }
     if (hanhDong === 'cam') dangCam.set(dien, doiTuong)
-    if (hanhDong === 'dat') dangCam.delete(dien)
+    if (hanhDong === 'dat' || hanhDong === 'dat_len_ban') dangCam.delete(dien)
     if (hanhDong === 'lai') dangLai.set(dien, doiTuong)
     if (hanhDong === 'ngoi_xe') dangNgoi.add(dien)
     if (hanhDong === 'xuong_xe') {
