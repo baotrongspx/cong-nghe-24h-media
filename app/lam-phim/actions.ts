@@ -83,6 +83,7 @@ const HE_KB = (giay: number, soTu: number) => `Bạn là AGENT BIÊN KỊCH phim
 Mỗi cảnh là một nhịp truyện dài khoảng ${giay} giây ở một nơi, nhân vật vừa nói vừa làm việc cụ thể (cầm, đưa, ngồi, đi, mở cửa, gọi điện...). Diễn bằng hành động, không chỉ đứng nói.
 Quy tắc:
 - Cấu trúc cả mẩu: câu mở gây tò mò → tình huống → sự cố → leo thang → cú lật bất ngờ → câu chốt. Chi tiết cài ở đầu phải được trả lại ở cuối.
+- Nếu có TƯ LIỆU (chuyển thể từ bách khoa toàn thư): KỂ BẰNG THOẠI giữa các nhân vật — nhân vật chính nói nhiều nhất, nhân vật phụ và các nhân vật khác cùng tham gia đối đáp; mỗi cảnh có ít nhất 2 người nói; người dẫn (Người kể) chỉ nói câu ngắn để nối thời gian, địa điểm. Sự kiện, năm tháng, con số, tên riêng phải đúng tư liệu; được thêm lời thoại, cảm xúc và chi tiết đời thường hợp lý.
 - Nếu được giao viết MỘT HỒI của phim dài: chỉ viết đúng phần việc của hồi đó theo dàn ý, nối tiếp liền mạch phần trước (giữ tên nơi chốn, đồ vật, tâm trạng), không kết thúc cả phim trừ khi là hồi cuối.
 - Nếu được giao viết MỘT HỒI của phim dài: chỉ viết đúng phần việc của hồi đó theo dàn ý, nối tiếp liền mạch phần trước (giữ tên nơi chốn, đồ vật, tâm trạng), không kết thúc cả phim trừ khi là hồi cuối.
 - bo_canh: tên ngắn của nơi diễn ra (ví dụ "Phòng khách nhà Tí"). Quay lại nơi cũ thì dùng ĐÚNG tên cũ. Cả mẩu chỉ nên có 2-4 bối cảnh.
@@ -97,15 +98,16 @@ Quy tắc:
 // ---------------- Agent: DÀN Ý phim dài (chia hồi) ----------------
 const HE_DY = `Bạn là BIÊN KỊCH TRƯỞNG phim hoạt hình 2D hài đời thường Việt Nam. Từ ý chính, lập DÀN Ý cho phim có độ dài cho trước, chia thành các HỒI liên tiếp (mỗi hồi khoảng 1,5 phút).
 Cả phim có mạch: mở đầu gây tò mò → tình huống → các rắc rối leo thang (mỗi hồi một rắc rối mới hoặc nặng hơn) → cao trào → cú lật bất ngờ → kết có hậu hoặc câu chốt hài.
+Nếu có TƯ LIỆU (cốt truyện thật từ bách khoa toàn thư): các hồi đi đúng các sự kiện thật theo thứ tự thời gian, không bịa sự kiện, năm tháng, con số; chỉ được thêm tình huống đời thường và xung đột nhỏ để kịch tính hóa, và nêu rõ nhân vật nào tham gia mỗi hồi.
 Mỗi hồi: tieu_de ngắn, noi_dung 3-5 câu nói rõ chuyện gì xảy ra, ở đâu, ai làm gì, đồ vật quan trọng, và kết hồi bằng một móc câu khiến người xem muốn xem tiếp. Chi tiết cài ở hồi đầu phải được trả lại ở cuối. ${CAM_CHUNG}`
 
-export async function agentDanY(yChinh: string, phut: number, nhanVat: NhanVatAi[]): Promise<KetQua<{ ten: string; hoi: { tieuDe: string; noiDung: string }[] }>> {
+export async function agentDanY(yChinh: string, phut: number, nhanVat: NhanVatAi[], tuLieu = ''): Promise<KetQua<{ ten: string; hoi: { tieuDe: string; noiDung: string }[] }>> {
   const y = cat(yChinh, 3000)
   if (y.length < 20) return { ok: false, thongBao: 'Hãy kể ý chính câu chuyện dài hơn một chút (ít nhất vài câu)' }
   const so = Math.min(10, Math.max(2, Math.round(phut / 1.5)))
   const r = await goiAgent<{ ten?: string; hoi?: { tieu_de?: string; noi_dung?: string }[] }>(
     HE_DY,
-    `Độ dài phim: ${phut} phút, chia đúng ${so} hồi.\nNhân vật:\n${nhanVat.filter((n) => n.ten.trim()).map((n) => `- ${n.ten}: ${n.tinhCach || n.moTa}`).join('\n') || '(tự đặt 2-4 nhân vật)'}\n\nÝ chính:\n${y}`,
+    `Độ dài phim: ${phut} phút, chia đúng ${so} hồi.\nNhân vật:\n${nhanVat.filter((n) => n.ten.trim()).map((n) => `- ${n.ten}: ${n.tinhCach || n.moTa}`).join('\n') || '(tự đặt 2-4 nhân vật)'}\n\nÝ chính:\n${y}${tuLieu ? `\n\nTƯ LIỆU:\n${cat(tuLieu, 12000)}` : ''}`,
     { type: 'OBJECT', properties: { ten: S({}), hoi: { type: 'ARRAY', items: { type: 'OBJECT', properties: { tieu_de: S({}), noi_dung: S({}) }, required: ['tieu_de', 'noi_dung'] } } }, required: ['ten', 'hoi'] },
     0.9,
   )
@@ -123,7 +125,7 @@ export async function agentKichBan(yChinh: string, soCanh: number, giay: number,
   const ds = nhanVat.filter((n) => n.ten.trim()).map((n) => `- ${n.ten}: ${n.tinhCach || n.moTa}`).join('\n')
   const r = await goiAgent<{ ten?: string; canh?: { bo_canh?: string; nhan_vat?: string[]; vi_tri?: string; hanh_dong?: string; loi?: string; hinh?: string }[] }>(
     HE_KB(g, Math.round(g * 2.8)),
-    `Nhân vật:\n${ds || '(chưa có, hãy tự đặt 2-3 nhân vật)'}\n\nÝ chính câu chuyện:\n${y}\n\n${cat(nguCanh, 4000)}\n\nViết đúng ${so} cảnh.`,
+    `Nhân vật:\n${ds || '(chưa có, hãy tự đặt 2-3 nhân vật)'}\n\nÝ chính câu chuyện:\n${y}\n\n${cat(nguCanh, 9000)}\n\nViết đúng ${so} cảnh.`,
     {
       type: 'OBJECT',
       properties: {
@@ -380,7 +382,7 @@ ${CAM_CHUNG}`
 export type DongMay = { canh: string; anhSang: string; thoiTiet: string; chuyen: string; ai: string; dien: string; hanhDong: string; doiTuong: string; hieuUng: string; mayQuay: string; camXuc: string; loi: string }
 export type NhanVatMay = { ten: string; loai: string; phuKien: string[]; mau: Record<string, string> }
 export async function agentLamPhimMay(phim: { ten: string; nhanVat: { ten: string; moTa: string }[]; canh: { loi: string; hinh: string; boiCanh?: string }[] }): Promise<KetQua<{ nhanVat: NhanVatMay[]; dong: DongMay[] }>> {
-  const nv = phim.nhanVat.filter((n) => n.ten.trim()).slice(0, 6)
+  const nv = phim.nhanVat.filter((n) => n.ten.trim()).slice(0, 12)
   const canh = phim.canh.filter((c) => c.loi.trim()).slice(0, 40)
   if (!canh.length) return { ok: false, thongBao: 'Bảng cảnh chưa có lời đọc nào' }
   const r = await goiAgent<{ nhan_vat?: { ten?: string; dang?: string; phu_kien?: string[]; mau_ao?: string; mau_quan?: string; mau_toc?: string }[]; dong?: Record<string, string>[] }>(
@@ -606,6 +608,53 @@ export async function agentTimDaoCuThieu(phim: { ten: string; yChinh: string; ca
   if (!r.ok) return r
   const thieu = (r.kq.thieu ?? []).map((t) => ({ ten: cat(t.ten, 60), moTa: cat(t.mo_ta, 200), lyDo: cat(t.ly_do, 120) })).filter((t) => t.ten).slice(0, 24)
   return { ok: true, thieu }
+}
+
+// ---------------- TƯ LIỆU: lấy cốt truyện từ Bách khoa toàn thư (Wikipedia tiếng Việt) ----------------
+const WIKI = 'https://vi.wikipedia.org/w/api.php'
+const DAU_WIKI = { 'user-agent': 'XuongPhim2D/1.0 (cong cu lam phim tu lieu)' }
+
+export async function layBachKhoa(chuDe: string): Promise<KetQua<{ tieuDe: string; url: string; noiDung: string }>> {
+  if (!(await daMoKhoa())) return { ok: false, thongBao: CHUA_MO }
+  const q = cat(chuDe, 150)
+  if (q.length < 2) return { ok: false, thongBao: 'Hãy gõ chủ đề cần tra' }
+  try {
+    const tim = await fetch(`${WIKI}?action=query&format=json&list=search&srlimit=1&srsearch=${encodeURIComponent(q)}`, { headers: DAU_WIKI, cache: 'no-store', signal: AbortSignal.timeout(15_000) }).then((r) => r.json())
+    const tieuDe: string | undefined = tim?.query?.search?.[0]?.title
+    if (!tieuDe) return { ok: false, thongBao: `Bách khoa toàn thư tiếng Việt không có bài nào về "${q}"` }
+    const bai = await fetch(`${WIKI}?action=query&format=json&prop=extracts&explaintext=1&exsectionformat=plain&redirects=1&titles=${encodeURIComponent(tieuDe)}`, { headers: DAU_WIKI, cache: 'no-store', signal: AbortSignal.timeout(20_000) }).then((r) => r.json())
+    const trang = Object.values(bai?.query?.pages ?? {})[0] as { title?: string; extract?: string } | undefined
+    const dung = (trang?.extract ?? '').split(/\n(?:Xem thêm|Chú thích|Tham khảo|Liên kết ngoài|Đọc thêm|Ghi chú|Thư mục)\s*\n/)[0]
+    const noiDung = dung.split(/\n+/).map((d) => d.replace(/\[\d+\]/g, '').replace(/\s+/g, ' ').trim()).filter((d) => d.length > 30).join('\n')
+    if (noiDung.length < 300) return { ok: false, thongBao: `Bài "${tieuDe}" quá ngắn để làm phim` }
+    return { ok: true, tieuDe: trang?.title ?? tieuDe, url: `https://vi.wikipedia.org/wiki/${encodeURIComponent((trang?.title ?? tieuDe).replace(/ /g, '_'))}`, noiDung: noiDung.slice(0, 20000) }
+  } catch (e) {
+    return { ok: false, thongBao: e instanceof Error ? `Không lấy được bài: ${e.message}` : 'Không lấy được bài' }
+  }
+}
+
+// Mọi người được nhắc trong bài → nhân vật (chính, phụ, khác), ngoại hình hợp thời đại, có giọng để thoại
+const HE_NV_TL = `Bạn là AGENT TUYỂN VAI cho phim hoạt hình 2D chuyển thể từ tư liệu bách khoa toàn thư.
+Đọc tư liệu và lập danh sách NHÂN VẬT gồm MỌI người được nhắc tới có vai trò trong câu chuyện (tối đa 12): nhân vật chính (người mà bài viết về), các nhân vật phụ (gia đình, thầy, bạn, đồng nghiệp, đối thủ, người cộng sự...) và vài nhân vật khác cần để kể chuyện (có thể là vai chung như "Thầy giáo", "Phóng viên" nếu bài nhắc mà không nêu tên).
+Mỗi nhân vật: ten (đúng tên trong bài), vai ("chinh", "phu" hoặc "khac"), mo_ta (ngoại hình cố định hợp tuổi, thời đại, quê quán: giới tính, tuổi, tóc, trang phục với màu cụ thể, có đeo kính không), tinh_cach (vai trò trong đời nhân vật chính, 1 câu), giong (giọng nói: nam/nữ, tuổi, sắc thái).
+Chỉ dựa trên tư liệu, không bịa thêm người không có. ${CAM_CHUNG.replace('Không dùng tên, hình ảnh của người thật, người nổi tiếng, nhân vật của phim hay kênh khác, nhãn hiệu thật. ', '')}`
+
+export async function agentNhanVatTuLieu(tieuDe: string, noiDung: string): Promise<KetQua<{ nhanVat: (NhanVatAi & { vai: string })[] }>> {
+  const r = await goiAgent<{ nhan_vat?: { ten?: string; vai?: string; mo_ta?: string; tinh_cach?: string; giong?: string }[] }>(
+    HE_NV_TL,
+    `TƯ LIỆU: ${cat(tieuDe, 120)}\n\n${cat(noiDung, 12000)}`,
+    { type: 'OBJECT', properties: { nhan_vat: { type: 'ARRAY', items: { type: 'OBJECT', properties: { ten: S({}), vai: S({ enum: ['chinh', 'phu', 'khac'] }), mo_ta: S({}), tinh_cach: S({}), giong: S({}) }, required: ['ten', 'vai', 'mo_ta', 'tinh_cach', 'giong'] } } }, required: ['nhan_vat'] },
+    0.4,
+  )
+  if (!r.ok) return r
+  const thu = { chinh: 0, phu: 1, khac: 2 } as Record<string, number>
+  const nhanVat = (r.kq.nhan_vat ?? [])
+    .map((n) => ({ ten: cat(n.ten, 40), vai: String(n.vai ?? 'khac'), moTa: cat(n.mo_ta, 400), tinhCach: `${n.vai === 'chinh' ? 'Nhân vật chính. ' : n.vai === 'phu' ? 'Nhân vật phụ. ' : ''}${cat(n.tinh_cach, 200)}`, giong: cat(n.giong, 150) }))
+    .filter((n) => n.ten)
+    .sort((a, b) => (thu[a.vai] ?? 2) - (thu[b.vai] ?? 2))
+    .slice(0, 12)
+  if (!nhanVat.length) return { ok: false, thongBao: 'AI chưa tìm được nhân vật trong bài, hãy thử lại' }
+  return { ok: true, nhanVat }
 }
 
 // ---------------- Agent 4: câu lệnh video ----------------

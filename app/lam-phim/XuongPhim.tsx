@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { type DongMay, type NhanVatMay, agentBoiCanh, agentDanY, agentDaoDien, agentKichBan, agentLamPhimMay, agentNhanVat, agentVideo, type DanhGia, type VideoAi } from './actions'
+import { type DongMay, type NhanVatMay, agentNhanVatTuLieu, layBachKhoa, agentBoiCanh, agentDanY, agentDaoDien, agentKichBan, agentLamPhimMay, agentNhanVat, agentVideo, type DanhGia, type VideoAi } from './actions'
 import XuongDaoCu from './XuongDaoCu'
 
 // Xưởng phim hoạt hình kể chuyện, có đội 4 agent:
@@ -10,7 +10,8 @@ import XuongDaoCu from './XuongDaoCu'
 type NhanVat = { ten: string; moTa: string; tinhCach?: string; giong?: string }
 type BoiCanh = { ten: string; moTa: string }
 type Canh = { id: string; loi: string; hinh: string; boiCanh?: string; nhanVat?: string[]; viTri?: string; hanhDong?: string; video?: VideoAi | null; tuKhungCuoi?: boolean }
-type Phim = { ten: string; yChinh: string; phongCach: string; giay: 8 | 10; phut?: number; nhanVat: NhanVat[]; boiCanh: BoiCanh[]; canh: Canh[]; danhGia?: DanhGia | null; banSua?: Canh[] | null }
+type TuLieu = { tieuDe: string; url: string; noiDung: string }
+type Phim = { ten: string; yChinh: string; phongCach: string; giay: 8 | 10; phut?: number; tuLieu?: TuLieu | null; nhanVat: NhanVat[]; boiCanh: BoiCanh[]; canh: Canh[]; danhGia?: DanhGia | null; banSua?: Canh[] | null }
 
 const KHOA_LUU = 'lam-phim-v1'
 
@@ -91,6 +92,50 @@ function taiVe(blob: Blob, ten: string) {
   setTimeout(() => URL.revokeObjectURL(a.href), 5000)
 }
 
+// Lấy cốt truyện thật từ Bách khoa toàn thư (Wikipedia tiếng Việt): mọi người được nhắc tới thành nhân vật có thoại
+function OTuLieu({ phim, tat, sua }: { phim: Phim; tat: boolean; sua: (x: Partial<Phim>) => void }) {
+  const [chuDe, setChuDe] = useState('')
+  const [dang, setDang] = useState(false)
+  const [loi, setLoi] = useState('')
+  async function lay() {
+    setLoi('')
+    setDang(true)
+    const r = await layBachKhoa(chuDe)
+    setDang(false)
+    if (!r.ok) return setLoi(r.thongBao)
+    const tuLieu = { tieuDe: r.tieuDe, url: r.url, noiDung: r.noiDung }
+    sua({ tuLieu, ten: r.tieuDe, yChinh: r.noiDung.slice(0, 2900) })
+    setDang(true)
+    setLoi('Đã lấy bài. Đang tạo nhân vật từ những người được nhắc tới trong bài…')
+    const nv = await agentNhanVatTuLieu(r.tieuDe, r.noiDung)
+    setDang(false)
+    if (!nv.ok) return setLoi(`Đã lấy bài nhưng chưa tạo được nhân vật: ${nv.thongBao}. Bấm "Agent nhân vật" ở mục 2 để thử lại.`)
+    sua({ nhanVat: nv.nhanVat.map((n) => ({ ten: n.ten, moTa: n.moTa, tinhCach: n.tinhCach, giong: n.giong })) })
+    setLoi(`Đã tạo ${nv.nhanVat.length} nhân vật. Chọn độ dài phim rồi bấm "Chạy cả đội" (agent nhân vật sẽ được bỏ qua nếu bạn chỉ bấm Agent kịch bản).`)
+  }
+  return (
+    <div className="mt-4 rounded-xl border border-indigo-200 bg-indigo-50/60 p-4">
+      <p className="font-semibold text-indigo-900">Lấy cốt truyện từ Bách khoa toàn thư</p>
+      <p className="mt-0.5 text-xs text-indigo-900/75">
+        Gõ tên người, sự kiện hay câu chuyện. Trang lấy bài trên Wikipedia tiếng Việt, mọi người được nhắc tới trong bài thành nhân vật (chính, phụ, khác), rồi đội agent biên đạo lại thành phim có thoại, đúng sự kiện thật.
+      </p>
+      <div className="mt-2 flex flex-wrap gap-2">
+        <input value={chuDe} onChange={(e) => setChuDe(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && !tat && !dang && lay()} placeholder="Ví dụ: Võ Thị Sáu, Trạng Quỳnh, Thánh Gióng, Nguyễn Văn Trỗi…" className="min-w-0 flex-1 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm" />
+        <button type="button" onClick={lay} disabled={tat || dang || chuDe.trim().length < 2} className="rounded-lg bg-indigo-700 px-3 py-1.5 text-sm font-semibold text-white hover:bg-indigo-800 disabled:opacity-50">
+          {dang ? 'Đang lấy bài…' : 'Lấy cốt truyện và tạo nhân vật'}
+        </button>
+      </div>
+      {loi && <p className={`mt-2 text-sm ${loi.startsWith('Đã') ? 'text-indigo-800' : 'text-red-600'}`}>{loi}</p>}
+      {phim.tuLieu && (
+        <p className="mt-2 text-xs text-indigo-900">
+          Đang dùng tư liệu: <a href={phim.tuLieu.url} target="_blank" rel="noreferrer" className="font-semibold underline">{phim.tuLieu.tieuDe}</a> ({phim.tuLieu.noiDung.split(/\s+/).length} chữ). Nhân vật lấy từ bài; kịch bản bám sự kiện thật.{' '}
+          <button type="button" onClick={() => sua({ tuLieu: null })} className="text-red-600 hover:underline">Bỏ tư liệu</button>
+        </p>
+      )}
+    </div>
+  )
+}
+
 // Tải kịch bản .txt cho công cụ LAM_PHIM.bat trên máy (Blender 2D + giọng VieNeu, không tốn tiền)
 function OLamPhimMay({ phim, tat }: { phim: Phim; tat: boolean }) {
   const [dang, setDang] = useState(false)
@@ -118,6 +163,7 @@ function OLamPhimMay({ phim, tat }: { phim: Phim; tat: boolean }) {
         `TEN: ${phim.ten.replace(/[\r\n]+/g, ' ')}`,
         ...phim.nhanVat.filter((n) => n.ten.trim()).map((n) => `NHAN VAT: ${n.ten.trim()} | ${loai.get(n.ten.trim()) ?? ''} | | ${them.get(n.ten.trim()) ?? ''}`),
         'NGUOI KE: Thiện Minh',
+        ...(phim.tuLieu ? [`NGUON: ${phim.tuLieu.url}`] : []),
       ]
       let khoa = ''
       for (const d of r.dong) {
@@ -360,6 +406,11 @@ export default function XuongPhim({ coAi }: { coAi: boolean }) {
   // Mỗi agent nhận bản phim mới nhất và trả về bản đã cập nhật (để "Chạy cả đội" nối tiếp được)
   async function lamAgent(maAgent: MaAgent, p: Phim): Promise<Phim> {
     setDangAgent(maAgent)
+    if (maAgent === 'nv' && p.tuLieu) {
+      const r = await agentNhanVatTuLieu(p.tuLieu.tieuDe, p.tuLieu.noiDung)
+      if (!r.ok) throw new Error(r.thongBao)
+      return { ...p, nhanVat: r.nhanVat.map((n) => ({ ten: n.ten, moTa: n.moTa, tinhCach: n.tinhCach, giong: n.giong })) }
+    }
     if (maAgent === 'nv') {
       const r = await agentNhanVat(p.yChinh, p.phongCach, p.nhanVat.map((n) => ({ ten: n.ten, moTa: n.moTa, tinhCach: n.tinhCach ?? '', giong: n.giong ?? '' })))
       if (!r.ok) throw new Error(r.thongBao)
@@ -369,14 +420,15 @@ export default function XuongPhim({ coAi }: { coAi: boolean }) {
       const nv = p.nhanVat.map((n) => ({ ten: n.ten, moTa: n.moTa, tinhCach: n.tinhCach ?? '', giong: n.giong ?? '' }))
       const phut = p.phut ?? 2
       const tongCanh = Math.max(4, Math.round((phut * 60) / 15))
+      const tl = p.tuLieu ? `TƯ LIỆU THẬT (${p.tuLieu.tieuDe}) — bám đúng sự kiện, biên đạo thành phim có thoại:\n${p.tuLieu.noiDung.slice(0, 5000)}` : ''
       if (phut <= 2) {
-        const r = await agentKichBan(p.yChinh, tongCanh, 15, nv)
+        const r = await agentKichBan(p.yChinh, tongCanh, 15, nv, tl)
         if (!r.ok) throw new Error(r.thongBao)
         boAnh(p.canh.map((c) => c.id))
         return { ...p, ten: r.ten || p.ten, canh: moi(r.canh), danhGia: null, banSua: null }
       }
       setTinAgent({ loai: 'ok', chu: `Đang lập dàn ý phim ${phut} phút…` })
-      const dy = await agentDanY(p.yChinh, phut, nv)
+      const dy = await agentDanY(p.yChinh, phut, nv, p.tuLieu?.noiDung ?? '')
       if (!dy.ok) throw new Error(dy.thongBao)
       const danY = dy.hoi.map((h, i) => `Hồi ${i + 1} - ${h.tieuDe}: ${h.noiDung}`).join('\n')
       const moiCanh: Canh[] = []
@@ -384,7 +436,7 @@ export default function XuongPhim({ coAi }: { coAi: boolean }) {
       for (let i = 0; i < dy.hoi.length; i++) {
         setTinAgent({ loai: 'ok', chu: `Đang viết hồi ${i + 1}/${dy.hoi.length}: ${dy.hoi[i].tieuDe}…` })
         const truoc = moiCanh.slice(-3).map((c) => `[${c.boiCanh}] ${c.hanhDong} | ${c.loi.replace(/\n/g, ' / ')}`).join('\n')
-        const nguCanh = `DÀN Ý CẢ PHIM (${phut} phút):\n${danY}\n\nBẠN ĐANG VIẾT HỒI ${i + 1}/${dy.hoi.length}: ${dy.hoi[i].tieuDe} — ${dy.hoi[i].noiDung}${i === dy.hoi.length - 1 ? '\nĐây là HỒI CUỐI: khép lại câu chuyện bằng cú lật và câu chốt.' : ''}${truoc ? `\n\nCÁC CẢNH NGAY TRƯỚC (nối tiếp liền mạch):\n${truoc}` : ''}`
+        const nguCanh = `DÀN Ý CẢ PHIM (${phut} phút):\n${danY}\n\nBẠN ĐANG VIẾT HỒI ${i + 1}/${dy.hoi.length}: ${dy.hoi[i].tieuDe} — ${dy.hoi[i].noiDung}${i === dy.hoi.length - 1 ? '\nĐây là HỒI CUỐI: khép lại câu chuyện bằng cú lật và câu chốt.' : ''}${truoc ? `\n\nCÁC CẢNH NGAY TRƯỚC (nối tiếp liền mạch):\n${truoc}` : ''}${tl ? `\n\n${tl}` : ''}`
         let r = await agentKichBan(p.yChinh, moiHoi, 15, nv, nguCanh)
         if (!r.ok) r = await agentKichBan(p.yChinh, moiHoi, 15, nv, nguCanh)
         if (!r.ok) throw new Error(`Hồi ${i + 1}: ${r.thongBao}`)
@@ -475,6 +527,7 @@ export default function XuongPhim({ coAi }: { coAi: boolean }) {
       {/* 1. Câu chuyện + đội agent */}
       <section id="cau-chuyen" className={KHUNG}>
         <h2 className={TD}><span className={SO}>1</span>Câu chuyện</h2>
+        <OTuLieu phim={phim} tat={tatAi} sua={sua} />
         <label className="mt-3 grid gap-1 text-sm font-medium">
           Tên mẩu chuyện
           <input value={phim.ten} maxLength={100} onChange={(e) => sua({ ten: e.target.value })} className={`${O} font-normal`} />
