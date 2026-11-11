@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { KIEU, giaiMa, tachPhuDe, veChu } from '@/lib/dungVideo'
 import { GIONG } from '@/lib/giongDoc'
-import { agentBoiCanh, agentDaoDien, agentKichBan, agentNhanVat, agentVideo, docDoanPhim, type DanhGia, type VideoAi } from './actions'
+import { agentBoiCanh, agentDaoDien, agentKichBan, agentLamPhimMay, agentNhanVat, agentVideo, docDoanPhim, type DanhGia, type VideoAi } from './actions'
 
 // Xưởng phim hoạt hình kể chuyện, có đội 4 agent:
 // 1) nhân vật (câu lệnh tờ mẫu cho Gemini)  2) kịch bản  3) bối cảnh (câu lệnh vẽ nền trống)  4) câu lệnh video 8/10 giây cho Gemini (Veo).
@@ -215,6 +215,61 @@ function taiVe(blob: Blob, ten: string) {
 }
 
 // Ô riêng: tải video bất kỳ lên → xem và tải khung cuối, chép câu nối tiếp
+// Tải kịch bản .txt cho công cụ LAM_PHIM.bat trên máy (Blender 2D + giọng VieNeu, không tốn tiền)
+function OLamPhimMay({ phim, tat }: { phim: Phim; tat: boolean }) {
+  const [dang, setDang] = useState(false)
+  const [loi, setLoi] = useState('')
+  const [xong, setXong] = useState('')
+  async function tai() {
+    setDang(true)
+    setLoi('')
+    setXong('')
+    try {
+      const r = await agentLamPhimMay({ ten: phim.ten, nhanVat: phim.nhanVat, canh: phim.canh })
+      if (!r.ok) throw new Error(r.thongBao)
+      const loai = new Map(r.nhanVat.map((n) => [n.ten, n.loai]))
+      const dong: string[] = [
+        '# Kịch bản tải từ trang Làm phim. Kéo thả tệp này vào E:\phim-blender\LAM_PHIM.bat',
+        `TEN: ${phim.ten.replace(/[\r\n]+/g, ' ')}`,
+        ...phim.nhanVat.filter((n) => n.ten.trim()).map((n) => `NHAN VAT: ${n.ten.trim()} | ${loai.get(n.ten.trim()) ?? ''} |`),
+        'NGUOI KE: Thiện Minh',
+      ]
+      let canh = ''
+      for (const d of r.dong) {
+        if (d.canh !== canh) {
+          canh = d.canh
+          dong.push('', `CANH: ${canh}`)
+        }
+        if (!d.loi) dong.push(`[${d.ai} ${d.hanhDong}]`)
+        else dong.push(`${d.ai}${d.hanhDong ? ` [${d.hanhDong}]` : ''}: ${d.loi}`)
+      }
+      const ten = (phim.ten.trim() || 'kich-ban').replace(/[\/:*?"<>|]+/g, '') + '.txt'
+      taiVe(new Blob(['\ufeff' + dong.join('\r\n') + '\r\n'], { type: 'text/plain;charset=utf-8' }), ten)
+      setXong(`Đã tải "${ten}" về thư mục Tải xuống (${r.dong.length} dòng).`)
+    } catch (e) {
+      setLoi(e instanceof Error ? e.message : 'Lỗi, hãy thử lại')
+    } finally {
+      setDang(false)
+    }
+  }
+  return (
+    <section className={KHUNG}>
+      <h2 className="text-lg font-bold">Làm phim 2D trên máy (miễn phí)</h2>
+      <ol className="mt-2 list-decimal space-y-0.5 pl-5 text-xs text-phu">
+        <li>Bấm nút dưới đây: AI chuyển bảng cảnh thành tệp kịch bản .txt và tải về.</li>
+        <li>Mở thư mục Tải xuống, kéo thả tệp đó vào E:\phim-blender\LAM_PHIM.bat.</li>
+        <li>Chờ máy lồng tiếng, vẽ và ghép phim. Phim .mp4 nằm cạnh tệp kịch bản.</li>
+        <li>Muốn sửa lời hay hành động thì mở tệp .txt bằng Notepad sửa rồi kéo thả lại.</li>
+      </ol>
+      <button type="button" onClick={tai} disabled={tat || dang} className="mt-3 rounded-lg bg-chinh px-3 py-1.5 text-sm font-semibold text-white hover:bg-chinh-dam disabled:opacity-50">
+        {dang ? 'Đang chuyển kịch bản…' : 'Tải kịch bản cho LAM_PHIM'}
+      </button>
+      {xong && <p className="mt-2 text-sm text-green-700">{xong}</p>}
+      {loi && <p className="mt-2 text-sm text-red-600">{loi}</p>}
+    </section>
+  )
+}
+
 function OCatKhung() {
   const [anh, setAnh] = useState<{ url: string; ten: string; blob: Blob } | null>(null)
   const [loi, setLoi] = useState('')
@@ -980,6 +1035,8 @@ export default function XuongPhim({ coAi }: { coAi: boolean }) {
           + Thêm bối cảnh
         </button>
       </section>
+
+      <OLamPhimMay phim={phim} tat={tatAi} />
 
       {/* 5. Câu lệnh video */}
       <section className={KHUNG}>

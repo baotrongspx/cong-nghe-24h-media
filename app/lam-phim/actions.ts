@@ -311,6 +311,51 @@ export async function agentBoiCanh(phongCach: string, ten: string[], daCo: BoiCa
   return { ok: true, boiCanh }
 }
 
+// ---------------- Agent: kịch bản cho công cụ LAM_PHIM trên máy (Blender 2D) ----------------
+const HD_MAY = ['di', 'chay', 'nhay', 'gat_dau', 'lac_dau', 'nga', 'nam', 'ngoi', 'cui', 'dam', 'da', 'vay', 'chi', 'cam', 'khoc', 'gian', 'ngac_nhien', 'cuoi']
+const HE_MAY = `Bạn chuyển một phim hoạt hình 2D đã viết sẵn thành KỊCH BẢN THOẠI cho máy dựng phim tự động.
+Máy chỉ hiểu: 3 bối cảnh (nha = trong nhà, duong = ngoài phố/hẻm, cong_vien = công viên/sân vườn ngoài trời), lời của từng nhân vật, lời người dẫn truyện (ai = "KE"), và các hành động: ${HD_MAY.join(', ')}.
+Quy tắc:
+- Tách lời đọc mỗi cảnh thành từng dòng: câu nhân vật nói trực tiếp thì ai = tên nhân vật đó (đúng tên trong danh sách); câu kể chuyện thì ai = "KE", hoặc ai = tên người kể nếu nhân vật tự kể ở ngôi "tôi".
+- Bỏ các cụm dẫn như "Tôi hỏi:", "Vợ tôi cười:" khỏi lời; thay bằng hành động phù hợp nếu có (vd cười -> cuoi, ngạc nhiên -> ngac_nhien).
+- hanh_dong: một trong danh sách trên hoặc chuỗi rỗng. Dòng chỉ có hành động, không lời, thì loi = "" (vd nhân vật chạy sang nhà khác: chay). Mỗi dòng tối đa 1 hành động. Không lạm dụng: khoảng 1/3 số dòng có hành động.
+- Mỗi dòng lời ngắn, tối đa khoảng 25 chữ. Giữ nguyên ý và câu chữ hài của bản gốc, không thêm tình tiết mới.
+- loai của nhân vật: nam (nam thanh niên/trung niên), nu (nữ), gia (người già).
+${CAM_CHUNG}`
+
+export type DongMay = { canh: string; ai: string; hanhDong: string; loi: string }
+export async function agentLamPhimMay(phim: { ten: string; nhanVat: { ten: string; moTa: string }[]; canh: { loi: string; hinh: string; boiCanh?: string }[] }): Promise<KetQua<{ nhanVat: { ten: string; loai: string }[]; dong: DongMay[] }>> {
+  const nv = phim.nhanVat.filter((n) => n.ten.trim()).slice(0, 6)
+  const canh = phim.canh.filter((c) => c.loi.trim()).slice(0, 40)
+  if (!canh.length) return { ok: false, thongBao: 'Bảng cảnh chưa có lời đọc nào' }
+  const r = await goiAgent<{ nhan_vat?: { ten?: string; loai?: string }[]; dong?: { canh?: string; ai?: string; hanh_dong?: string; loi?: string }[] }>(
+    HE_MAY,
+    `Tên phim: ${cat(phim.ten, 120)}\n\nNhân vật:\n${nv.map((n) => `- ${cat(n.ten, 40)}: ${cat(n.moTa, 300)}`).join('\n')}\n\nCác cảnh theo thứ tự:\n${canh.map((c, i) => `${i + 1}. [bối cảnh: ${cat(c.boiCanh, 80) || '?'}; hình: ${cat(c.hinh, 300)}] Lời: ${cat(c.loi, 1000)}`).join('\n')}`,
+    {
+      type: 'OBJECT',
+      properties: {
+        nhan_vat: { type: 'ARRAY', items: { type: 'OBJECT', properties: { ten: S({}), loai: S({ enum: ['nam', 'nu', 'gia'] }) }, required: ['ten', 'loai'] } },
+        dong: { type: 'ARRAY', items: { type: 'OBJECT', properties: { canh: S({ enum: ['nha', 'duong', 'cong_vien'] }), ai: S({}), hanh_dong: S({}), loi: S({}) }, required: ['canh', 'ai', 'hanh_dong', 'loi'] } },
+      },
+      required: ['nhan_vat', 'dong'],
+    },
+    0.4,
+  )
+  if (!r.ok) return r
+  const ten = new Set(nv.map((n) => n.ten.trim()))
+  const nhanVat = (r.kq.nhan_vat ?? []).map((n) => ({ ten: cat(n.ten, 40), loai: ['nam', 'nu', 'gia'].includes(String(n.loai)) ? String(n.loai) : 'nam' })).filter((n) => ten.has(n.ten))
+  const dong = (r.kq.dong ?? [])
+    .map((d) => ({
+      canh: ['nha', 'duong', 'cong_vien'].includes(String(d.canh)) ? String(d.canh) : 'nha',
+      ai: ten.has(cat(d.ai, 40)) ? cat(d.ai, 40) : 'KE',
+      hanhDong: HD_MAY.includes(String(d.hanh_dong)) ? String(d.hanh_dong) : '',
+      loi: cat(d.loi, 300).replace(/[\r\n:\[\]]+/g, ' ').trim(),
+    }))
+    .filter((d) => d.loi || (d.hanhDong && d.ai !== 'KE'))
+  if (!dong.length) return { ok: false, thongBao: 'AI chưa chuyển được kịch bản, hãy bấm thử lại' }
+  return { ok: true, nhanVat, dong }
+}
+
 // ---------------- Agent 4: câu lệnh video ----------------
 const HE_VD = (giay: number) => `Bạn là AGENT ĐẠO DIỄN VIDEO. Với từng cảnh, viết diễn biến để AI tạo video (như Veo trong Gemini) dựng một đoạn ${giay} giây liền mạch, bắt đầu từ ảnh khung đầu của cảnh.
 Với mỗi cảnh (giữ đúng số "so"):
