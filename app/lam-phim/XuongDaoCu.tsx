@@ -53,6 +53,7 @@ function XemTruoc({ d }: { d: DaoCuMoi }) {
   return (
     <svg viewBox={`${x0 - le} ${-z1 - le} ${x1 - x0 + 2 * le} ${z1 - z0 + 2 * le}`} className="h-28 w-full">
       {d.hinh.map((n, i) => <Net key={i} n={n} />)}
+      {d.xe && [d.xe.lai, d.xe.khach].filter((p) => p.length === 2).map((p, i) => <circle key={i} cx={p[0]} cy={-p[1]} r={0.15} fill="#E11D48" />)}
     </svg>
   )
 }
@@ -128,7 +129,7 @@ export default function XuongDaoCu({ tat, phim }: { tat: boolean; phim: PhimDoc 
   }
 
   function tai() {
-    const chon = ds.filter((d) => d.chon).map((d) => ({ ma: d.ma, ten: d.ten, nhom: d.nhom, cam: d.cam, thoiDai: d.thoiDai, noi: d.noi, hinh: d.hinh }))
+    const chon = ds.filter((d) => d.chon).map((d) => ({ ma: d.ma, ten: d.ten, nhom: d.nhom, cam: d.cam, thoiDai: d.thoiDai, noi: d.noi, hinh: d.hinh, xe: d.xe }))
     if (!chon.length) return setLoi('Chưa chọn món nào')
     const a = document.createElement('a')
     a.href = URL.createObjectURL(new Blob([JSON.stringify({ loai: 'xuong-dao-cu', phien_ban: 1, dao_cu: chon }, null, 1)], { type: 'application/json' }))
@@ -188,7 +189,7 @@ export default function XuongDaoCu({ tat, phim }: { tat: boolean; phim: PhimDoc 
                 {d.ten}
               </label>
               <div className="flex items-center justify-between text-[11px] text-phu">
-                <span>{d.ma}{d.cam ? ' · cầm được' : ''}</span>
+                <span>{d.ma}{d.cam ? ' · cầm được' : ''}{d.xe ? ` · xe chở ${d.xe.khach.length ? 2 : 1} người` : ''}</span>
                 <button type="button" onClick={() => veLai(i)} disabled={tat} className="text-chinh hover:underline disabled:opacity-50">Vẽ lại</button>
               </div>
             </li>

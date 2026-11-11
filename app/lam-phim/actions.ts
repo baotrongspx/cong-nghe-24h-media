@@ -316,6 +316,7 @@ export async function agentBoiCanh(phongCach: string, ten: string[], daCo: BoiCa
 // Chỉ được chọn tài nguyên có trong danh mục (danhMuc2d.ts sinh từ máy), để máy dựng được tự động.
 const HD_MAY = [...HANH_DONG_2D] as string[]
 const DO_CAM = Object.entries(DAO_CU_2D).filter(([, v]) => v.cam).map(([m]) => m)
+const XE_CHO = Object.entries(DAO_CU_2D).filter(([, v]) => v.xe).map(([m]) => m)
 const HE_MAY = `Bạn là AI ĐẠO DIỄN của một xưởng phim hoạt hình 2D. Bạn chuyển phim đã viết thành KỊCH BẢN DÀN DỰNG cho máy tự dựng.
 Máy CHỈ dựng được các tài nguyên trong danh mục dưới đây, tuyệt đối không bịa mã khác.
 
@@ -324,6 +325,7 @@ KHU VỰC (bối cảnh.khu): ${Object.entries(KHU_VUC_2D).map(([m, t]) => `${m}
 THỜI TIẾT: ${Object.entries(THOI_TIET_2D).map(([m, t]) => `${m}=${t}`).join(', ')}
 HÀNH ĐỘNG: ${HD_MAY.join(', ')}; tương tác đồ: cam (cầm một đồ), dat (đặt đồ đang cầm xuống), dua (đưa đồ đang cầm cho người khác)
 ĐỒ CẦM ĐƯỢC: ${DO_CAM.map((m) => `${m} (${DAO_CU_2D[m].ten})`).join(', ')}
+XE CHỞ NGƯỜI: ${XE_CHO.map((m) => `${m} (${DAO_CU_2D[m].ten}${DAO_CU_2D[m].cho_khach ? ', chở thêm 1 khách' : ''})`).join(', ')}; đi xe: lai (doi_tuong = mã xe), ngoi_xe (doi_tuong = tên người đang lái), xuong_xe
 HIỆU ỨNG: ${Object.entries(HIEU_UNG_2D).map(([m, t]) => `${m}=${t}`).join(', ')}
 GÓC MÁY: ${Object.entries(MAY_QUAY_2D).map(([m, t]) => `${m}=${t}`).join(', ')}
 
@@ -336,6 +338,7 @@ Quy tắc dàn dựng:
 6. Góc máy có chủ đích: mở đầu mỗi khu vực bằng toan hoặc rat_rong; đối thoại xen trung, can, qua_vai; khoảnh khắc sốc dùng dac_ta hoặc day_vao; nhân vật yếu thế goc_cao, oai vệ goc_thap; người chạy dùng lia; kết phim keo_ra.
 7. Hiệu ứng chỉ dùng khi đúng cảm xúc (mồ hôi khi bối rối, tim khi yêu, khói khi tức...). Khoảng một nửa số dòng có hành động, không lạm dụng.
 8. Dòng chỉ có hành động, không lời: loi = "" và dien = người làm.
+10. Đi xe: người lái "lai" một xe trong danh sách XE CHỞ NGƯỜI, người đi cùng "ngoi_xe" với doi_tuong = tên người lái, rồi người lái "di" hoặc "chay" là cả xe chạy; tới nơi thì người lái "xuong_xe". Đổi khu vực thì tự xuống xe.
 9. loai nhân vật: nam, nu hoặc gia (người già).
 ${CAM_CHUNG}`
 
@@ -382,20 +385,36 @@ export async function agentLamPhimMay(phim: { ten: string; nhanVat: { ten: strin
   const trong = (v: unknown, ds: string[]) => (ds.includes(String(v)) ? String(v) : '')
   const dong: DongMay[] = []
   const dangCam = new Map<string, string>()
+  const dangLai = new Map<string, string>()
+  const dangNgoi = new Set<string>()
+  let canhTruoc = ''
   for (const d of r.kq.dong ?? []) {
     const ai = khop(d.ai) ?? 'KE'
     const dien = khop(d.dien) ?? (ai === 'KE' ? '' : ai)
-    let hanhDong = trong(d.hanh_dong, [...HD_MAY, 'cam', 'dat', 'dua'])
+    let hanhDong = trong(d.hanh_dong, [...HD_MAY, 'cam', 'dat', 'dua', 'lai', 'ngoi_xe', 'xuong_xe'])
     let doiTuong = ''
     if (hanhDong === 'cam') doiTuong = trong(d.doi_tuong, DO_CAM)
-    if (hanhDong === 'dua') doiTuong = khop(d.doi_tuong) ?? ''
+    if (hanhDong === 'dua' || hanhDong === 'ngoi_xe') doiTuong = khop(d.doi_tuong) ?? ''
+    if (hanhDong === 'lai') doiTuong = trong(d.doi_tuong, XE_CHO)
+    const canhNay = trong(d.canh, [...DS_KHU_2D]) || 'nha.phong_khach'
+    if (canhNay !== canhTruoc) dangLai.clear()
+    canhTruoc = canhNay
     // máy sẽ báo lỗi nếu thiếu: bỏ những hành động không đủ thông tin thay vì làm hỏng cả kịch bản
-    if (!dien || (hanhDong === 'cam' && !doiTuong) || (hanhDong === 'dua' && (!doiTuong || !dangCam.get(dien))) || (hanhDong === 'dat' && !dangCam.get(dien))) {
+    const xeCuaLai = dangLai.get(doiTuong)
+    if (!dien || (hanhDong === 'cam' && !doiTuong) || (hanhDong === 'dua' && (!doiTuong || !dangCam.get(dien))) || (hanhDong === 'dat' && !dangCam.get(dien)) ||
+      (hanhDong === 'lai' && !doiTuong) || (hanhDong === 'ngoi_xe' && (!xeCuaLai || !DAO_CU_2D[xeCuaLai]?.cho_khach)) || (hanhDong === 'xuong_xe' && !dangLai.has(dien) && !dangNgoi.has(dien))) {
       hanhDong = ''
       doiTuong = ''
     }
     if (hanhDong === 'cam') dangCam.set(dien, doiTuong)
     if (hanhDong === 'dat') dangCam.delete(dien)
+    if (hanhDong === 'lai') dangLai.set(dien, doiTuong)
+    if (hanhDong === 'ngoi_xe') dangNgoi.add(dien)
+    if (hanhDong === 'xuong_xe') {
+      if (dangLai.has(dien)) dangNgoi.clear()
+      dangLai.delete(dien)
+      dangNgoi.delete(dien)
+    }
     if (hanhDong === 'dua') {
       dangCam.set(doiTuong, dangCam.get(dien) ?? '')
       dangCam.delete(dien)
@@ -403,7 +422,7 @@ export async function agentLamPhimMay(phim: { ten: string; nhanVat: { ten: strin
     const loi = cat(d.loi, 300).replace(/[\r\n:[\]{}()]+/g, ' ').replace(/\s+/g, ' ').trim()
     if (!loi && !hanhDong) continue
     dong.push({
-      canh: trong(d.canh, [...DS_KHU_2D]) || 'nha.phong_khach',
+      canh: canhNay,
       anhSang: trong(d.anh_sang, Object.keys(ANH_SANG_2D)) || 'sang',
       thoiTiet: trong(d.thoi_tiet, Object.keys(THOI_TIET_2D)) || 'nang',
       ai, dien, hanhDong, doiTuong,
@@ -418,7 +437,8 @@ export async function agentLamPhimMay(phim: { ten: string; nhanVat: { ten: strin
 
 // ---------------- Agent: HỌA SĨ ĐẠO CỤ (Gemini vẽ đạo cụ 2D bằng dữ liệu hình học) ----------------
 export type NetVe = { k: 'r' | 'e' | 'p' | 's' | 'l'; so: number[]; mau: string; vien: boolean }
-export type DaoCuMoi = { ma: string; ten: string; nhom: string; cam: boolean; thoiDai: string; noi: string[]; hinh: NetVe[] }
+export type XeMoi = { lai: number[]; khach: number[]; banh: number[]; kieu: 'dap' | 'ngoi'; truoc: boolean }
+export type DaoCuMoi = { ma: string; ten: string; nhom: string; cam: boolean; thoiDai: string; noi: string[]; hinh: NetVe[]; xe?: XeMoi }
 const NHOM_DO = ['noi_that', 'cong_nghe', 'van_phong', 'an_uong', 'sinh_hoat', 'lao_dong', 'giao_thong', 'lich_su', 'dong_vat', 'thuc_vat', 'moi_truong', 'dac_biet']
 // Mô hình vẽ: mạnh hơn mô hình viết chữ (đặt GEMINI_MODEL_VE trên Vercel để chọn khác)
 const MO_HINH_VE = [process.env.GEMINI_MODEL_VE?.trim() ?? '', 'gemini-3.5-flash', 'gemini-3-flash', 'gemini-2.5-flash']
@@ -459,12 +479,13 @@ VÍ DỤ một đạo cụ đạt chuẩn (cốc cà phê sữa, cầm tay):
 ${VI_DU_DO}
 
 ma: mã không dấu viết thường nối "_" (vd "xe_xich_lo"). ten: tên tiếng Việt có dấu. nhom: một trong ${NHOM_DO.join(', ')}.
+XE CHỞ NGƯỜI ĐƯỢC (xe đạp, xe máy, xích lô, ô tô, xe buýt, thuyền, xe bò, kiệu...): vẽ nhìn NGANG, đầu xe quay sang PHẢI, và điền xe_kieu ("dap" nếu người lái đạp chân, "ngoi" nếu ngồi yên), xe_lai = [x, z] điểm giữa mặt yên người lái, xe_khach = [x, z] mặt ghế khách (mảng rỗng nếu không chở khách), xe_banh = [tâm_x, tâm_z, bán_kính, ...] mỗi bánh 3 số (mảng rỗng nếu không có bánh), xe_truoc = true nếu thân xe che trước người ngồi (ô tô, xe buýt). Đồ không phải xe: xe_kieu = "khong", các mảng rỗng.
 thoi_dai: "hien_dai" (đồ chỉ có thời nay), "co_xua" (đồ chỉ có thời xưa) hoặc "moi_thoi". noi: các nơi hay có món này, chọn trong: nha, chung_cu, quan_ca_phe, van_phong, truong, duong, cong_vien, cho.`
 
 export async function agentVeDaoCu(moTa: string[]): Promise<KetQua<{ daoCu: DaoCuMoi[] }>> {
   const ds = moTa.map((m) => cat(m, 220)).filter(Boolean).slice(0, 4)
   if (!ds.length) return { ok: false, thongBao: 'Hãy nhập tên đạo cụ cần vẽ' }
-  const r = await goiAgent<{ dao_cu?: { ma?: string; ten?: string; nhom?: string; cam?: boolean; thoi_dai?: string; noi?: string[]; hinh?: { k?: string; so?: number[]; mau?: string; vien?: boolean }[] }[] }>(
+  const r = await goiAgent<{ dao_cu?: { ma?: string; ten?: string; nhom?: string; cam?: boolean; thoi_dai?: string; noi?: string[]; hinh?: { k?: string; so?: number[]; mau?: string; vien?: boolean }[]; xe_kieu?: string; xe_lai?: number[]; xe_khach?: number[]; xe_banh?: number[]; xe_truoc?: boolean }[] }>(
     HE_DO,
     `Vẽ các đạo cụ sau (mỗi dòng một món):\n${ds.map((m) => `- ${m}`).join('\n')}`,
     {
@@ -478,8 +499,10 @@ export async function agentVeDaoCu(moTa: string[]): Promise<KetQua<{ daoCu: DaoC
               ma: S({}), ten: S({}), nhom: S({ enum: NHOM_DO }), cam: { type: 'BOOLEAN' }, thoi_dai: S({ enum: ['hien_dai', 'co_xua', 'moi_thoi'] }),
               noi: { type: 'ARRAY', items: S({}) },
               hinh: { type: 'ARRAY', items: { type: 'OBJECT', properties: { k: S({ enum: ['r', 'e', 'p', 's', 'l'] }), so: { type: 'ARRAY', items: { type: 'NUMBER' } }, mau: S({}), vien: { type: 'BOOLEAN' } }, required: ['k', 'so', 'mau', 'vien'] } },
+              xe_kieu: S({ enum: ['khong', 'dap', 'ngoi'] }), xe_lai: { type: 'ARRAY', items: { type: 'NUMBER' } }, xe_khach: { type: 'ARRAY', items: { type: 'NUMBER' } },
+              xe_banh: { type: 'ARRAY', items: { type: 'NUMBER' } }, xe_truoc: { type: 'BOOLEAN' },
             },
-            required: ['ma', 'ten', 'nhom', 'cam', 'thoi_dai', 'noi', 'hinh'],
+            required: ['ma', 'ten', 'nhom', 'cam', 'thoi_dai', 'noi', 'hinh', 'xe_kieu', 'xe_lai', 'xe_khach', 'xe_banh', 'xe_truoc'],
           },
         },
       },
@@ -500,11 +523,18 @@ export async function agentVeDaoCu(moTa: string[]): Promise<KetQua<{ daoCu: DaoC
     })
     const ma = cat(d.ma, 40).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/g, 'd').replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '')
     if (!ma || hinh.length < 3) return []
+    const so = (a?: number[]) => (a ?? []).map(Number).filter((x) => Number.isFinite(x) && Math.abs(x) < 40)
+    const lai = so(d.xe_lai).slice(0, 2)
+    const banh = so(d.xe_banh)
+    const xe: XeMoi | undefined = (d.xe_kieu === 'dap' || d.xe_kieu === 'ngoi') && lai.length === 2 && banh.length >= 3
+      ? { lai, khach: so(d.xe_khach).slice(0, 2), banh: banh.slice(0, banh.length - (banh.length % 3)), kieu: d.xe_kieu, truoc: !!d.xe_truoc }
+      : undefined
     return [{
       ma, ten: cat(d.ten, 60) || ma, nhom: NHOM_DO.includes(String(d.nhom)) ? String(d.nhom) : 'dac_biet', cam: !!d.cam,
       thoiDai: ['hien_dai', 'co_xua', 'moi_thoi'].includes(String(d.thoi_dai)) ? String(d.thoi_dai) : 'moi_thoi',
       noi: (d.noi ?? []).map((x) => cat(x, 20)).filter((x) => ['nha', 'chung_cu', 'quan_ca_phe', 'van_phong', 'truong', 'duong', 'cong_vien', 'cho'].includes(x)),
       hinh,
+      ...(xe ? { xe, cam: false } : {}),
     }]
   })
   if (!daoCu.length) return { ok: false, thongBao: 'AI chưa vẽ được, hãy bấm thử lại' }
