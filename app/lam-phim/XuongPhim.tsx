@@ -165,7 +165,7 @@ function OLamPhimMay({ phim, tat }: { phim: Phim; tat: boolean }) {
       if (!r.ok) throw new Error(r.thongBao)
       const loai = new Map(r.nhanVat.map((n) => [n.ten, n.loai]))
       const dong: string[] = [
-        '# Kịch bản tải từ trang Làm phim. Kéo thả tệp này vào E:\phim-blender\\LAM_PHIM.bat',
+        '# Kịch bản tải từ trang Làm phim. Kéo thả tệp này vào E:\\phim-blender\\LAM_PHIM.bat',
         `TEN: ${phim.ten.replace(/[\r\n]+/g, ' ')}`,
         ...phim.nhanVat.filter((n) => n.ten.trim()).map((n) => `NHAN VAT: ${n.ten.trim()} | ${loai.get(n.ten.trim()) ?? ''} |`),
         'NGUOI KE: Thiện Minh',
