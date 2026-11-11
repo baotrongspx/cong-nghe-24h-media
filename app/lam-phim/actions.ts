@@ -316,6 +316,7 @@ const HD_MAY = ['di', 'chay', 'nhay', 'gat_dau', 'lac_dau', 'nga', 'nam', 'ngoi'
 const HE_MAY = `Bạn chuyển một phim hoạt hình 2D đã viết sẵn thành KỊCH BẢN THOẠI cho máy dựng phim tự động.
 Máy chỉ hiểu: 3 bối cảnh (nha = trong nhà, duong = ngoài phố/hẻm, cong_vien = công viên/sân vườn ngoài trời), lời của từng nhân vật, lời người dẫn truyện (ai = "KE"), và các hành động: ${HD_MAY.join(', ')}.
 Quy tắc:
+- Trường ai PHẢI là "KE" hoặc CHÍNH XÁC một tên trong danh sách nhân vật (chép nguyên văn, có dấu). Phần lớn các câu là lời nhân vật nói với nhau; chỉ câu kể chuyện mới là "KE".
 - Tách lời đọc mỗi cảnh thành từng dòng: câu nhân vật nói trực tiếp thì ai = tên nhân vật đó (đúng tên trong danh sách); câu kể chuyện thì ai = "KE", hoặc ai = tên người kể nếu nhân vật tự kể ở ngôi "tôi".
 - Bỏ các cụm dẫn như "Tôi hỏi:", "Vợ tôi cười:" khỏi lời; thay bằng hành động phù hợp nếu có (vd cười -> cuoi, ngạc nhiên -> ngac_nhien).
 - hanh_dong: một trong danh sách trên hoặc chuỗi rỗng. Dòng chỉ có hành động, không lời, thì loi = "" (vd nhân vật chạy sang nhà khác: chay). Mỗi dòng tối đa 1 hành động. Không lạm dụng: khoảng 1/3 số dòng có hành động.
@@ -342,16 +343,26 @@ export async function agentLamPhimMay(phim: { ten: string; nhanVat: { ten: strin
     0.4,
   )
   if (!r.ok) return r
-  const ten = new Set(nv.map((n) => n.ten.trim()))
-  const nhanVat = (r.kq.nhan_vat ?? []).map((n) => ({ ten: cat(n.ten, 40), loai: ['nam', 'nu', 'gia'].includes(String(n.loai)) ? String(n.loai) : 'nam' })).filter((n) => ten.has(n.ten))
+  // Khớp tên AI trả về với tên thật (không phân biệt hoa thường, chấp nhận thiếu/thừa danh xưng như "Chị Na" / "Na")
+  const thuong = (x: unknown) => cat(x, 60).toLowerCase().normalize('NFC')
+  const khop = (x: unknown): string | null => {
+    const t = thuong(x)
+    if (!t || t === 'ke') return null
+    return nv.find((n) => thuong(n.ten) === t)?.ten.trim() ?? nv.find((n) => thuong(n.ten).includes(t) || t.includes(thuong(n.ten)))?.ten.trim() ?? null
+  }
+  const nhanVat = (r.kq.nhan_vat ?? []).flatMap((n) => {
+    const t = khop(n.ten)
+    return t ? [{ ten: t, loai: ['nam', 'nu', 'gia'].includes(String(n.loai)) ? String(n.loai) : 'nam' }] : []
+  })
   const dong = (r.kq.dong ?? [])
     .map((d) => ({
       canh: ['nha', 'duong', 'cong_vien'].includes(String(d.canh)) ? String(d.canh) : 'nha',
-      ai: ten.has(cat(d.ai, 40)) ? cat(d.ai, 40) : 'KE',
+      ai: khop(d.ai) ?? 'KE',
       hanhDong: HD_MAY.includes(String(d.hanh_dong)) ? String(d.hanh_dong) : '',
       loi: cat(d.loi, 300).replace(/[\r\n:\[\]]+/g, ' ').trim(),
     }))
-    .filter((d) => d.loi || (d.hanhDong && d.ai !== 'KE'))
+    .map((d) => (d.ai === 'KE' ? { ...d, hanhDong: '' } : d))
+    .filter((d) => d.loi || d.hanhDong)
   if (!dong.length) return { ok: false, thongBao: 'AI chưa chuyển được kịch bản, hãy bấm thử lại' }
   return { ok: true, nhanVat, dong }
 }
