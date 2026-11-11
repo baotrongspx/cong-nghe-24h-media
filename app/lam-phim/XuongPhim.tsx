@@ -1,22 +1,17 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { KIEU, giaiMa, tachPhuDe, veChu } from '@/lib/dungVideo'
-import { GIONG } from '@/lib/giongDoc'
-import { type DongMay, type NhanVatMay, agentBoiCanh, agentDanY, agentDaoDien, agentKichBan, agentLamPhimMay, agentNhanVat, agentVideo, docDoanPhim, type DanhGia, type VideoAi } from './actions'
+import { type DongMay, type NhanVatMay, agentBoiCanh, agentDanY, agentDaoDien, agentKichBan, agentLamPhimMay, agentNhanVat, agentVideo, type DanhGia, type VideoAi } from './actions'
 import XuongDaoCu from './XuongDaoCu'
 
 // Xưởng phim hoạt hình kể chuyện, có đội 4 agent:
-// 1) nhân vật (câu lệnh tờ mẫu cho Gemini)  2) kịch bản  3) bối cảnh (câu lệnh vẽ nền trống)  4) câu lệnh video 8/10 giây cho Gemini (Veo).
+// 1) nhân vật  2) kịch bản (phim dài: dàn ý chia hồi)  3) đạo diễn chấm và sửa  4) bối cảnh — rồi tải kịch bản dàn dựng về máy nhà làm phim
 // Chữ lưu trong trình duyệt (localStorage), ảnh lưu trong IndexedDB: tắt trang mở lại vẫn còn, nhưng chỉ trên máy này.
 type NhanVat = { ten: string; moTa: string; tinhCach?: string; giong?: string }
 type BoiCanh = { ten: string; moTa: string }
 type Canh = { id: string; loi: string; hinh: string; boiCanh?: string; nhanVat?: string[]; viTri?: string; hanhDong?: string; video?: VideoAi | null; tuKhungCuoi?: boolean }
 type Phim = { ten: string; yChinh: string; phongCach: string; giay: 8 | 10; phut?: number; nhanVat: NhanVat[]; boiCanh: BoiCanh[]; canh: Canh[]; danhGia?: DanhGia | null; banSua?: Canh[] | null }
 
-const K = { rong: 1280, cao: 720, coChu: 40, viTriChu: 0.86 }
-const CHUYEN = 0.25 // giây chuyển mờ giữa hai cảnh
-const TOI_DA_DOAN = 1100 // số ký tự tối đa cho một lượt giọng đọc
 const KHOA_LUU = 'lam-phim-v1'
 
 const ma = () => crypto.randomUUID()
@@ -55,8 +50,6 @@ function chuanHoa(p: Partial<Phim> | null): Phim | null {
   return { ...MAU, ...p, giay: p.giay === 10 ? 10 : 8, nhanVat: p.nhanVat ?? [], boiCanh: p.boiCanh ?? [], canh: p.canh } as Phim
 }
 
-// Giọng đã đọc rồi thì giữ lại (tới khi tải lại trang): dựng lại vì đổi ảnh, bật tắt phụ đề không tốn thêm lượt
-const giongDaDoc = new Map<string, string>()
 
 // ---- Kho ảnh trong trình duyệt (IndexedDB) ----
 function moKho() {
@@ -80,16 +73,8 @@ async function khoAnh<T>(cheDo: IDBTransactionMode, lam: (k: IDBObjectStore) => 
   }
 }
 
-function taiAnh(u: string) {
-  return new Promise<HTMLImageElement | null>((xong) => {
-    const a = new Image()
-    a.onload = () => xong(a)
-    a.onerror = () => xong(null)
-    a.src = u
-  })
-}
 
-// ---- Câu lệnh dán vào Gemini ----
+// ---- Nhân vật trong cảnh ----
 const coTen = (chu: string, ten: string) => new RegExp(`(?<![\\p{L}\\p{N}])${ten.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![\\p{L}\\p{N}])`, 'iu').test(chu)
 
 function nhanVatTrongCanh(p: Phim, c: Canh) {
@@ -97,51 +82,6 @@ function nhanVatTrongCanh(p: Phim, c: Canh) {
   return p.nhanVat.filter((n) => n.ten.trim() && ((c.nhanVat ?? []).some((t) => t.trim().toLowerCase() === n.ten.trim().toLowerCase()) || coTen(chu, n.ten)))
 }
 
-const timBoiCanh = (p: Phim, c: Canh) => p.boiCanh.find((b) => b.ten.trim().toLowerCase() === (c.boiCanh ?? '').trim().toLowerCase())
-
-function cauLenhMau(p: Phim, n: NhanVat) {
-  return [
-    p.phongCach.trim(),
-    'Vẽ tờ mẫu nhân vật trên nền trắng trơn, không ghi tên: cùng một nhân vật đứng nhìn thẳng, nhìn nghiêng, nhìn sau lưng, và 4 khuôn mặt: vui, giận, khóc, ngạc nhiên. Giữ đúng tỉ lệ và màu sắc ở mọi tư thế.',
-    `Nhân vật: ${n.ten.trim()} — ${n.moTa.trim()}`,
-    'Không có chữ trong ảnh.',
-  ].join('\n\n')
-}
-
-// Một câu lệnh vẽ cả dàn nhân vật trên cùng một tờ mẫu
-function cauLenhTatCaNhanVat(p: Phim) {
-  const ds = p.nhanVat.filter((n) => n.ten.trim() && n.moTa.trim())
-  return [
-    p.phongCach.trim(),
-    `Vẽ TỜ MẪU CẢ DÀN NHÂN VẬT trên nền trắng trơn, ảnh ngang 16:9. Có ${ds.length} nhân vật, xếp thành ${ds.length} cột từ trái sang phải theo đúng thứ tự dưới đây, cùng một tỉ lệ chiều cao.`,
-    'Mỗi cột vẽ một nhân vật: một dáng đứng nhìn thẳng toàn thân lớn, bên dưới là dáng nhìn nghiêng, và một hàng 3 khuôn mặt nhỏ: vui, giận, ngạc nhiên. Giữ đúng màu sắc và quần áo ở mọi hình. Các nhân vật phải khác nhau rõ ràng.',
-    `Danh sách nhân vật (trái sang phải):\n${ds.map((n, i) => `${i + 1}. ${n.ten.trim()}: ${n.moTa.trim()}`).join('\n')}`,
-    'Không viết tên hay bất kỳ chữ nào trong ảnh, không logo.',
-  ].join('\n\n')
-}
-
-function cauLenhBoiCanh(p: Phim, b: BoiCanh) {
-  return [
-    p.phongCach.trim(),
-    `Vẽ bối cảnh TRỐNG, không có người: ${b.ten.trim()} — ${b.moTa.trim()}`,
-    'Ảnh ngang tỉ lệ 16:9, góc nhìn ngang tầm mắt, chừa khoảng trống ở giữa và hai bên để sau này đặt nhân vật. Không có chữ, không có logo.',
-  ].join('\n\n')
-}
-
-function cauLenhCanh(p: Phim, c: Canh) {
-  const co = nhanVatTrongCanh(p, c)
-  const bc = timBoiCanh(p, c)
-  return [
-    p.phongCach.trim(),
-    co.length ? `Nhân vật trong cảnh (vẽ giống hệt tờ mẫu tôi đính kèm):\n${co.map((n) => `- ${n.ten.trim()}: ${n.moTa.trim()}`).join('\n')}` : '',
-    bc ? `Bối cảnh (giữ y hệt ảnh bối cảnh tôi đính kèm): ${bc.ten.trim()} — ${bc.moTa.trim()}` : '',
-    c.viTri?.trim() ? `Vị trí trên khung hình (giữ đúng): ${c.viTri.trim()}` : '',
-    `Cảnh cần vẽ: ${c.hinh.trim()}`,
-    'Ảnh ngang tỉ lệ 16:9. Không có chữ, không ghi tên nhân vật, không có logo trong ảnh.',
-  ]
-    .filter(Boolean)
-    .join('\n\n')
-}
 
 function taiVe(blob: Blob, ten: string) {
   const a = document.createElement('a')
@@ -151,7 +91,6 @@ function taiVe(blob: Blob, ten: string) {
   setTimeout(() => URL.revokeObjectURL(a.href), 5000)
 }
 
-// Ô riêng: tải video bất kỳ lên → xem và tải khung cuối, chép câu nối tiếp
 // Tải kịch bản .txt cho công cụ LAM_PHIM.bat trên máy (Blender 2D + giọng VieNeu, không tốn tiền)
 function OLamPhimMay({ phim, tat }: { phim: Phim; tat: boolean }) {
   const [dang, setDang] = useState(false)
@@ -220,32 +159,7 @@ function OLamPhimMay({ phim, tat }: { phim: Phim; tat: boolean }) {
   )
 }
 
-// Lời để giọng máy đọc: bỏ tên người nói ở đầu dòng ("Tí: ...")
-const loiDeDoc = (s: string) =>
-  s
-    .split('\n')
-    .map((d) => d.replace(/^\s*[^:\n]{1,30}:\s*/, '').trim())
-    .filter(Boolean)
-    .join(' ')
-    .replace(/\s+/g, ' ')
 
-// ---- Vẽ một khung hình ----
-function veCanh(g: CanvasRenderingContext2D, a: HTMLImageElement | null, so: number, tienDo: number) {
-  g.fillStyle = '#0f172a'
-  g.fillRect(0, 0, K.rong, K.cao)
-  if (!a) {
-    g.fillStyle = '#64748b'
-    g.font = 'bold 44px system-ui, "Segoe UI", sans-serif'
-    g.textAlign = 'center'
-    g.textBaseline = 'middle'
-    g.fillText(`Cảnh ${so + 1} (chưa có ảnh)`, K.rong / 2, K.cao * 0.42)
-    return
-  }
-  const lech = a.width / a.height / (K.rong / K.cao)
-  const vua = lech > 0.85 && lech < 1.18 ? Math.max(K.rong / a.width, K.cao / a.height) : Math.min(K.rong / a.width, K.cao / a.height)
-  const tl = vua * (1 + 0.06 * (so % 2 ? 1 - tienDo : tienDo))
-  g.drawImage(a, (K.rong - a.width * tl) / 2, (K.cao - a.height * tl) / 2, a.width * tl, a.height * tl)
-}
 
 function NutChep({ chu, nhan = 'Chép', chinh = false }: { chu: string; nhan?: string; chinh?: boolean }) {
   const [da, setDa] = useState(false)
@@ -378,11 +292,6 @@ export default function XuongPhim({ coAi }: { coAi: boolean }) {
   const [san, setSan] = useState(false)
   const [dangAgent, setDangAgent] = useState<MaAgent | null>(null)
   const [tinAgent, setTinAgent] = useState<{ loai: 'ok' | 'loi'; chu: string } | null>(null)
-  const [giong, setGiong] = useState('Puck')
-  const [phuDe, setPhuDe] = useState(true)
-  const [buoc, setBuoc] = useState('')
-  const [loi, setLoi] = useState('')
-  const [video, setVideo] = useState<{ url: string; duoi: string } | null>(null)
 
   // Mở trang: lấy lại bài đang làm dở và ảnh đã tải lên
   useEffect(() => {
@@ -417,7 +326,6 @@ export default function XuongPhim({ coAi }: { coAi: boolean }) {
     } catch {}
   }, [phim, san])
 
-  useEffect(() => () => void (video && URL.revokeObjectURL(video.url)), [video])
 
   const sua = (p: Partial<Phim>) => setPhim((x) => ({ ...x, ...p }))
   const suaCanh = (id: string, p: Partial<Canh>) => setPhim((x) => ({ ...x, canh: x.canh.map((c) => (c.id === id ? { ...c, ...p } : c)) }))
@@ -432,15 +340,6 @@ export default function XuongPhim({ coAi }: { coAi: boolean }) {
     setAnh((x) => Object.fromEntries(Object.entries(x).filter(([id]) => !ids.includes(id))))
   }
 
-  async function chonAnh(id: string, tep: File | undefined) {
-    if (!tep) return
-    if (!tep.type.startsWith('image/')) return setLoi('Chỉ nhận tệp ảnh')
-    await khoAnh('readwrite', (k) => k.put(tep, id)).catch(() => {})
-    setAnh((x) => {
-      if (x[id]) URL.revokeObjectURL(x[id])
-      return { ...x, [id]: URL.createObjectURL(tep) }
-    })
-  }
 
   function xoaCanh(id: string) {
     boAnh([id])
@@ -531,8 +430,7 @@ export default function XuongPhim({ coAi }: { coAi: boolean }) {
         setPhim(p)
         xong++
       }
-      setVideo(null)
-      setTinAgent({ loai: 'ok', chu: ds.length > 1 ? 'Cả đội đã làm xong. Kéo xuống để chép câu lệnh.' : `${TEN_AGENT[ds[0]]} đã làm xong.` })
+      setTinAgent({ loai: 'ok', chu: ds.length > 1 ? 'Cả đội đã làm xong. Kéo xuống mục 6 và 7 để thêm đạo cụ và tải kịch bản về máy.' : `${TEN_AGENT[ds[0]]} đã làm xong.` })
     } catch (e) {
       const ten = TEN_AGENT[ds[xong]]
       setTinAgent({ loai: 'loi', chu: `${ten} gặp lỗi: ${e instanceof Error ? e.message : 'không gọi được AI'}.${xong ? ' Các agent trước đã làm xong, bấm lại nút của agent này để làm tiếp.' : ''}` })
@@ -549,148 +447,20 @@ export default function XuongPhim({ coAi }: { coAi: boolean }) {
 
   function apDungBanSua() {
     if (phim.canh.some((c) => anh[c.id]) && !confirm('Dùng kịch bản đã sửa thay cho kịch bản hiện tại? Ảnh đã tải lên các cảnh cũ sẽ bị bỏ.')) return
-    setVideo(null)
     setPhim((x) => apDung(x))
   }
 
   function mauMoi() {
     if (!confirm('Xóa bảng cảnh, bối cảnh và ảnh đang có để làm mẩu chuyện mới? (Nhân vật và phong cách được giữ lại)')) return
     boAnh(phim.canh.map((c) => c.id))
-    setVideo(null)
     setPhim((x) => ({ ...x, ten: '', yChinh: '', boiCanh: [], danhGia: null, banSua: null, canh: [{ id: ma(), loi: '', hinh: '' }] }))
   }
 
-  const coLoi = phim.canh.filter((c) => loiDeDoc(c.loi))
-  // Gom các cảnh liền nhau thành từng đoạn, mỗi đoạn một lượt giọng đọc
-  const nhom: Canh[][] = []
-  for (const c of coLoi) {
-    const cuoi = nhom.at(-1)
-    if (cuoi && cuoi.reduce((s, x) => s + loiDeDoc(x.loi).length + 1, 0) + loiDeDoc(c.loi).length <= TOI_DA_DOAN) cuoi.push(c)
-    else nhom.push([c])
-  }
-  const tongChu = coLoi.reduce((s, c) => s + loiDeDoc(c.loi).length, 0)
-  const uocGiay = Math.round(tongChu / 14)
-  const soAnh = coLoi.filter((c) => anh[c.id]).length
-  const luotMoi = nhom.filter((n) => !giongDaDoc.has(`${giong}|${n.map((c) => loiDeDoc(c.loi)).join('\n')}`)).length
-
-  async function dung() {
-    setLoi('')
-    setVideo(null)
-    if (!coLoi.length) return setLoi('Bảng cảnh chưa có lời đọc nào')
-    const qua = coLoi.findIndex((c) => loiDeDoc(c.loi).length > TOI_DA_DOAN)
-    if (qua >= 0) return setLoi(`Lời đọc của cảnh ${phim.canh.indexOf(coLoi[qua]) + 1} quá dài, hãy tách thành hai cảnh`)
-    const kieu = KIEU.find((k) => typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported(k))
-    if (!kieu) return setLoi('Trình duyệt này không quay được video, hãy dùng Chrome hoặc Edge bản mới')
-    const ac = new AudioContext()
-    try {
-      const am: AudioBuffer[] = []
-      for (let i = 0; i < nhom.length; i++) {
-        setBuoc(`Giọng AI đang đọc đoạn ${i + 1}/${nhom.length}…`)
-        const chu = nhom[i].map((c) => loiDeDoc(c.loi)).join('\n')
-        const khoa = `${giong}|${chu}`
-        let b64 = giongDaDoc.get(khoa)
-        if (!b64) {
-          const r = await docDoanPhim(chu, giong)
-          if (!r.ok) throw new Error(r.thongBao)
-          b64 = r.amThanh
-          giongDaDoc.set(khoa, b64)
-        }
-        am.push(await ac.decodeAudioData(giaiMa(b64)))
-      }
-      const ghep = ac.createBuffer(1, am.reduce((s, b) => s + b.length, 0), ac.sampleRate)
-      let viTri = 0
-      for (const b of am) {
-        ghep.copyToChannel(b.getChannelData(0), 0, viTri)
-        viTri += b.length
-      }
-      const tong = ghep.duration
-
-      setBuoc('Đang nạp ảnh…')
-      const lich: { tu: number; den: number; a: HTMLImageElement | null; so: number; pd: { d: string; den: number }[] }[] = []
-      let moc = 0
-      for (let i = 0; i < nhom.length; i++) {
-        const nang = nhom[i].map((c) => loiDeDoc(c.loi).length + 12)
-        const tongNang = nang.reduce((x, y) => x + y, 0)
-        for (let j = 0; j < nhom[i].length; j++) {
-          const c = nhom[i][j]
-          const tu = moc
-          const den = (moc += (nang[j] / tongNang) * am[i].duration)
-          const doan = tachPhuDe(loiDeDoc(c.loi))
-          const nangPd = doan.map((d) => d.length + 8)
-          const tongPd = nangPd.reduce((x, y) => x + y, 0)
-          let mocPd = tu
-          lich.push({
-            tu,
-            den,
-            a: anh[c.id] ? await taiAnh(anh[c.id]) : null,
-            so: phim.canh.indexOf(c),
-            pd: doan.map((d, n) => ({ d, den: (mocPd += (nangPd[n] / tongPd) * (den - tu)) })),
-          })
-        }
-      }
-
-      const c = document.createElement('canvas')
-      c.width = K.rong
-      c.height = K.cao
-      const g = c.getContext('2d')!
-      const ve = (t: number) => {
-        const tim = lich.findIndex((y) => t < y.den)
-        const viTriCanh = tim < 0 ? lich.length - 1 : tim
-        const x = lich[viTriCanh]
-        const trong = t - x.tu
-        if (viTriCanh > 0 && trong < CHUYEN) veCanh(g, lich[viTriCanh - 1].a, lich[viTriCanh - 1].so, 1)
-        g.globalAlpha = viTriCanh > 0 ? Math.min(1, trong / CHUYEN) : 1
-        veCanh(g, x.a, x.so, Math.min(1, trong / (x.den - x.tu)))
-        g.globalAlpha = 1
-        if (phuDe) {
-          const p = x.pd.find((y) => t < y.den) ?? x.pd.at(-1)
-          if (p) veChu(g, K, p.d)
-        }
-      }
-
-      const dich = ac.createMediaStreamDestination()
-      const nguon = ac.createBufferSource()
-      nguon.buffer = ghep
-      nguon.connect(dich)
-      nguon.connect(ac.destination)
-      ve(0)
-      const rec = new MediaRecorder(new MediaStream([...c.captureStream(30).getVideoTracks(), ...dich.stream.getAudioTracks()]), {
-        mimeType: kieu,
-        videoBitsPerSecond: 6_000_000,
-      })
-      const manh: Blob[] = []
-      rec.ondataavailable = (e) => e.data.size && manh.push(e.data)
-      const daXong = new Promise<void>((xong) => (rec.onstop = () => xong()))
-
-      rec.start(1000)
-      const batDau = ac.currentTime
-      nguon.start()
-      let khung = 0
-      const lap = () => {
-        const t = ac.currentTime - batDau
-        ve(Math.min(t, tong))
-        setBuoc(`Đang dựng phim ${Math.min(Math.floor(t), Math.ceil(tong))}/${Math.ceil(tong)} giây — giữ nguyên tab này, đừng chuyển tab hay thu nhỏ cửa sổ…`)
-        if (t < tong + 0.3) khung = requestAnimationFrame(lap)
-        else rec.stop()
-      }
-      khung = requestAnimationFrame(lap)
-      await daXong
-      cancelAnimationFrame(khung)
-
-      setVideo({ url: URL.createObjectURL(new Blob(manh, { type: kieu.split(';')[0] })), duoi: kieu.startsWith('video/mp4') ? 'mp4' : 'webm' })
-    } catch (e) {
-      setLoi(e instanceof Error ? e.message : 'Dựng phim lỗi')
-    } finally {
-      setBuoc('')
-      ac.close()
-    }
-  }
 
   if (!san) return <p className="mt-6 animate-pulse text-sm text-phu">Đang mở bài làm dở…</p>
 
-  const ban = !!buoc || !!dangAgent
+  const ban = !!dangAgent
   const tatAi = ban || !coAi
-  const tenTep = (phim.ten.trim() || 'phim-hoat-hinh').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/gi, 'd').replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-|-$/g, '').toLowerCase()
   const tenBoiCanh = [...new Set([...phim.boiCanh.map((b) => b.ten), ...phim.canh.map((c) => c.boiCanh ?? '')].map((t) => t.trim()).filter(Boolean))]
 
   return (
@@ -736,7 +506,7 @@ export default function XuongPhim({ coAi }: { coAi: boolean }) {
         <div className="mt-4 rounded-lg bg-nen p-3">
           <p className="text-sm font-semibold">Đội agent</p>
           <ol className="mt-1 list-decimal space-y-0.5 pl-5 text-xs text-phu">
-            <li>Agent nhân vật: thiết kế nhân vật và viết câu lệnh vẽ tờ mẫu cho Gemini.</li>
+            <li>Agent nhân vật: thiết kế ngoại hình, tính cách, giọng nói của từng nhân vật.</li>
             <li>Agent kịch bản: phim dài thì lập dàn ý chia hồi trước, rồi viết từng cảnh có lời thoại và hành động.</li>
             <li>Agent đạo diễn & khán giả YouTube: chấm kịch bản theo 10 mục, biến từng điểm yếu thành điểm mạnh và viết lại bản đã sửa.</li>
             <li>Agent bối cảnh: tả từng nơi chốn của câu chuyện.</li>
@@ -765,14 +535,9 @@ export default function XuongPhim({ coAi }: { coAi: boolean }) {
         <div className="flex flex-wrap items-center gap-3">
           <h2 className={TD}><span className={SO}>2</span>Nhân vật</h2>
           <NutAgent ma="nv" dang={dangAgent} tat={tatAi} chay={() => chayAgent(['nv'])} nhan="Agent nhân vật" />
-          {phim.nhanVat.some((n) => n.ten.trim() && n.moTa.trim()) && <NutChep chu={cauLenhTatCaNhanVat(phim)} nhan="Chép 1 câu lệnh vẽ tất cả nhân vật" chinh />}
         </div>
-        <ol className="mt-2 list-decimal space-y-0.5 pl-5 text-xs text-phu">
-          <li>Bấm Chép 1 câu lệnh vẽ tất cả nhân vật, dán vào Gemini: ra một tờ mẫu có cả dàn nhân vật. Nhân vật nào vẽ chưa đẹp thì chép câu lệnh riêng của người đó để vẽ lại.</li>
-          <li>Lưu tờ mẫu ưng ý về máy. Từ đó mỗi lần làm ảnh hay video, đính kèm tờ mẫu này.</li>
-        </ol>
         <label className="mt-3 grid gap-1 text-sm font-medium">
-          Phong cách chung (tự chèn vào mọi câu lệnh)
+          Phong cách chung
           <textarea value={phim.phongCach} rows={2} maxLength={800} onChange={(e) => sua({ phongCach: e.target.value })} className={`${O} font-normal`} />
         </label>
         <ul className="mt-3 space-y-2">
@@ -787,7 +552,6 @@ export default function XuongPhim({ coAi }: { coAi: boolean }) {
                 <input value={n.giong ?? ''} maxLength={150} placeholder="Giọng nói (cho video)" onChange={(e) => suaNhanVat(i, { giong: e.target.value })} className={O} />
               </div>
               <span className="flex items-center gap-2">
-                <NutChep chu={cauLenhMau(phim, n)} nhan="Chép câu lệnh tờ mẫu" chinh />
                 <button type="button" onClick={() => sua({ nhanVat: phim.nhanVat.filter((_, j) => j !== i) })} className="text-xs text-red-600 hover:underline">
                   Xóa
                 </button>
@@ -856,32 +620,9 @@ export default function XuongPhim({ coAi }: { coAi: boolean }) {
                     <textarea value={c.loi} rows={2} maxLength={600} onChange={(e) => suaCanh(c.id, { loi: e.target.value })} className={`${O} font-normal`} />
                   </label>
                   <label className="grid gap-1 text-xs font-medium">
-                    Khung hình đầu (để vẽ ảnh tĩnh)
+                    Hình ảnh cảnh (ai ở đâu, làm gì)
                     <textarea value={c.hinh} rows={2} maxLength={600} onChange={(e) => suaCanh(c.id, { hinh: e.target.value })} className={`${O} font-normal`} />
                   </label>
-                </div>
-                <div className="grid content-start gap-2">
-                  {anh[c.id] ? (
-                    <img src={anh[c.id]} alt={`Ảnh cảnh ${i + 1}`} className="aspect-video w-full rounded-md bg-slate-900 object-contain" />
-                  ) : (
-                    <div className="flex aspect-video w-full items-center justify-center rounded-md border border-dashed border-slate-300 text-xs text-phu">Chưa có ảnh</div>
-                  )}
-                  <div className="flex flex-wrap items-center gap-2">
-                    <NutChep chu={cauLenhCanh(phim, c)} nhan="Chép câu lệnh ảnh đầu" />
-                    <label className="cursor-pointer rounded-md border border-slate-300 bg-white px-2 py-1 text-xs font-semibold hover:border-chinh hover:text-chinh">
-                      {anh[c.id] ? 'Đổi ảnh' : 'Chọn ảnh'}
-                      <input
-                        type="file"
-                        accept="image/*"
-                        className="hidden"
-                        onChange={(e) => {
-                          chonAnh(c.id, e.target.files?.[0])
-                          suaCanh(c.id, { tuKhungCuoi: false })
-                          e.target.value = ''
-                        }}
-                      />
-                    </label>
-                  </div>
                 </div>
               </div>
             </li>
@@ -932,7 +673,6 @@ export default function XuongPhim({ coAi }: { coAi: boolean }) {
               <input value={b.ten} maxLength={80} onChange={(e) => suaBoiCanh(i, { ten: e.target.value })} className={O} />
               <textarea value={b.moTa} rows={2} maxLength={600} onChange={(e) => suaBoiCanh(i, { moTa: e.target.value })} className={O} />
               <span className="flex items-center gap-2 sm:col-span-2">
-                <NutChep chu={cauLenhBoiCanh(phim, b)} nhan="Chép câu lệnh vẽ bối cảnh" chinh />
                 <button type="button" onClick={() => sua({ boiCanh: phim.boiCanh.filter((_, j) => j !== i) })} className="text-xs text-red-600 hover:underline">
                   Xóa
                 </button>
@@ -948,45 +688,6 @@ export default function XuongPhim({ coAi }: { coAi: boolean }) {
       <XuongDaoCu tat={tatAi} phim={phim} />
       <OLamPhimMay phim={phim} tat={tatAi} />
 
-      {/* 6. Dựng nhanh bằng ảnh tĩnh */}
-      <section id="dung-nhanh" className={KHUNG}>
-        <details>
-          <summary className="cursor-pointer text-lg font-bold">7. Dựng nhanh bằng ảnh tĩnh (không cần làm video)</summary>
-          <p className="mt-2 text-sm text-phu">
-            Ghép ảnh khung đầu của các cảnh với giọng AI đọc lời thoại và phụ đề thành video 16:9. Dài khoảng {Math.floor(uocGiay / 60)} phút {uocGiay % 60} giây · đã có {soAnh}/{coLoi.length} ảnh · lần dựng này tốn {luotMoi} lượt giọng Gemini.
-          </p>
-          <div className="mt-3 flex flex-wrap items-center gap-3">
-            <select value={giong} onChange={(e) => setGiong(e.target.value)} disabled={ban} className="rounded-md border border-slate-300 px-2 py-1.5 text-sm">
-              {GIONG.filter(([m]) => m !== 'may').map(([m, ten]) => (
-                <option key={m} value={m}>
-                  {m} — {ten}
-                </option>
-              ))}
-            </select>
-            <label className="flex items-center gap-1.5 text-sm">
-              <input type="checkbox" checked={phuDe} onChange={(e) => setPhuDe(e.target.checked)} disabled={ban} />
-              Phụ đề
-            </label>
-            <button type="button" onClick={dung} disabled={ban} className="rounded-lg bg-slate-900 px-4 py-1.5 text-sm font-semibold text-white hover:bg-slate-700 disabled:opacity-50">
-              {buoc ? 'Đang dựng…' : video ? 'Dựng lại' : 'Dựng phim'}
-            </button>
-          </div>
-          <p className="mt-2 text-xs text-phu">Phim được quay theo thời gian thật: phim dài bao nhiêu thì chờ bấy nhiêu. Giữ nguyên tab trong lúc dựng.</p>
-          {buoc && <p className="mt-2 animate-pulse text-sm text-chinh">{buoc}</p>}
-          {loi && <p className="mt-2 text-sm text-red-600">{loi}</p>}
-          {video && (
-            <div className="mt-3 grid gap-3">
-              <video src={video.url} controls className="w-full max-w-2xl rounded-lg bg-black" />
-              <div className="flex flex-wrap items-center gap-3">
-                <a href={video.url} download={`${tenTep}.${video.duoi}`} className="rounded-lg bg-chinh px-3 py-1.5 text-sm font-semibold text-white hover:bg-chinh-dam">
-                  Tải video về
-                </a>
-                {phim.ten.trim() && <NutChep chu={phim.ten.trim()} nhan="Chép tên làm tiêu đề YouTube" />}
-              </div>
-            </div>
-          )}
-        </details>
-      </section>
     </div>
   )
 }

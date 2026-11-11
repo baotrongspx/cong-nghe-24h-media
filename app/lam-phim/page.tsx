@@ -16,7 +16,6 @@ const BUOC = [
   { id: 'boi-canh', so: 5, ten: 'Bối cảnh', mo: 'Nơi chốn' },
   { id: 'dao-cu', so: 6, ten: 'Xưởng đạo cụ', mo: 'Gemini vẽ thêm đồ' },
   { id: 'xuat-may', so: 7, ten: 'Làm phim', mo: 'Tải kịch bản về máy' },
-  { id: 'dung-nhanh', so: 8, ten: 'Dựng nhanh', mo: 'Phim từ ảnh tĩnh' },
 ]
 
 export default async function LamPhim() {
