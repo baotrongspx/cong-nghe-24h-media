@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { KIEU, giaiMa, tachPhuDe, veChu } from '@/lib/dungVideo'
 import { GIONG } from '@/lib/giongDoc'
 import { docBaiThanhGiong } from './actions'
 
@@ -14,19 +15,6 @@ const KHO = {
 type MaKho = keyof typeof KHO
 type Kho = (typeof KHO)[MaKho]
 const CHUYEN = 0.5 // giây chuyển cảnh mờ dần giữa hai ảnh
-
-const giaiMa = (b64: string) => Uint8Array.from(atob(b64), (c) => c.charCodeAt(0)).buffer
-
-// Cắt chữ thành từng đoạn phụ đề ngắn (tối đa ~8 từ) theo câu / dòng
-function tachPhuDe(chu: string) {
-  const doan: string[] = []
-  for (const cau of chu.split(/(?<=[.!?…])\s+|\n+/)) {
-    const tu = cau.trim().split(/\s+/).filter(Boolean)
-    const so = Math.ceil(tu.length / 8)
-    for (let i = 0; i < so; i++) doan.push(tu.slice(Math.round((i * tu.length) / so), Math.round(((i + 1) * tu.length) / so)).join(' '))
-  }
-  return doan.filter(Boolean)
-}
 
 // Tiêu đề YouTube (tối đa 100 ký tự): câu đầu của bài, bỏ link / hashtag
 function taoTieuDe(noiDung: string, shorts: boolean) {
@@ -64,32 +52,6 @@ function veAnh(g: CanvasRenderingContext2D, k: Kho, a: HTMLImageElement, nen: HT
   const tl = Math.min(k.rong / a.width, k.cao / a.height) * (1 + 0.08 * tienDo)
   g.drawImage(a, (k.rong - a.width * tl) / 2, (k.cao - a.height * tl) / 2, a.width * tl, a.height * tl)
 }
-
-function veChu(g: CanvasRenderingContext2D, k: Kho, chu: string) {
-  g.font = `bold ${k.coChu}px system-ui, "Segoe UI", Roboto, sans-serif`
-  const rongToiDa = Math.min(k.rong - 100, 1000)
-  const dong: string[] = []
-  for (const tu of chu.split(' ')) {
-    const thu = dong.length ? `${dong[dong.length - 1]} ${tu}` : tu
-    if (dong.length && g.measureText(thu).width <= rongToiDa) dong[dong.length - 1] = thu
-    else dong.push(tu)
-  }
-  const cao = Math.round(k.coChu * 1.32)
-  const y0 = k.cao * k.viTriChu - (dong.length * cao) / 2
-  g.textAlign = 'center'
-  g.textBaseline = 'middle'
-  g.lineJoin = 'round'
-  dong.forEach((d, i) => {
-    const y = y0 + i * cao + cao / 2
-    g.lineWidth = 10
-    g.strokeStyle = 'rgba(0,0,0,0.85)'
-    g.strokeText(d, k.rong / 2, y)
-    g.fillStyle = '#fff'
-    g.fillText(d, k.rong / 2, y)
-  })
-}
-
-const KIEU = ['video/mp4;codecs=avc1.42E01F,mp4a.40.2', 'video/mp4', 'video/webm;codecs=vp9,opus', 'video/webm']
 
 function NutChep({ chu }: { chu: string }) {
   const [da, setDa] = useState(false)
