@@ -11,6 +11,7 @@ export async function goiGeminiJson(
   contents: { role: 'user' | 'model'; parts: { text: string }[] }[],
   schema: object,
   temperature = 0.4,
+  cho = 25_000,
 ): Promise<string> {
   const khoa = process.env.GEMINI_API_KEY?.trim()
   if (!khoa) throw new Error('Chưa cài GEMINI_API_KEY')
@@ -22,7 +23,7 @@ export async function goiGeminiJson(
       contents,
       generationConfig: { temperature, responseMimeType: 'application/json', responseSchema: schema },
     }),
-    signal: AbortSignal.timeout(25_000),
+    signal: AbortSignal.timeout(cho),
     cache: 'no-store',
   })
   const json = await res.json().catch(() => ({}))

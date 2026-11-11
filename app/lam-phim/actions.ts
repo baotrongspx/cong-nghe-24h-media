@@ -17,77 +17,204 @@ export async function nhapMatKhau(_truoc: string | null, form: FormData): Promis
   return null
 }
 
-// Bộ quy tắc thể loại: hoạt hình 2D chibi, hài kể chuyện đời thường. AI viết bảng cảnh phải theo đúng các điều này.
-const QUY_TAC = `Bạn là đạo diễn kiêm biên kịch phim hoạt hình 2D chibi, thể loại HÀI KỂ CHUYỆN ĐỜI THƯỜNG Việt Nam.
-Nhiệm vụ: từ ý chính người dùng đưa, viết bảng cảnh cho MỘT mẩu chuyện ngắn.
+export type NhanVatAi = { ten: string; moTa: string; tinhCach: string; giong: string }
+export type BoiCanhAi = { ten: string; moTa: string }
+export type CanhAi = { boiCanh: string; nhanVat: string[]; hanhDong: string; loi: string; hinh: string }
+export type VideoAi = { dienBien: { tu: number; den: number; viec: string }[]; mayQuay: string; amThanh: string }
+type KetQua<T> = ({ ok: true } & T) | { ok: false; thongBao: string }
 
-Quy tắc thể loại (không được đổi sang thể loại khác):
-- Nhân vật chính tự kể ở ngôi thứ nhất ("tôi"), giọng tự giễu, gần gũi. Chỉ có MỘT giọng đọc toàn bộ, nên lời thoại của người khác phải viết lồng vào lời kể (ví dụ: Vợ tôi bảo: "...").
-- Cấu trúc: câu mở gây tò mò → đặt tình huống → sự cố → leo thang → cú lật bất ngờ → câu chốt. Chi tiết cài ở đầu phải được trả lại ở cuối.
-- Câu ngắn, dễ đọc thành tiếng, cứ 2-3 cảnh có một chỗ gây cười. Không giảng đạo lý dài dòng.
-- Mỗi cảnh đọc trong khoảng 8-12 giây: "loi" dài 20-40 từ.
-- Mỗi cảnh phải đẩy câu chuyện đi tiếp; không có cảnh minh họa chung chung.
+const S = (o: object) => ({ type: 'STRING', ...o })
+const CO_DAU = /[ăâđêôơưáàảãạéèẻẽẹíìỉĩịóòỏõọúùủũụýỳỷỹỵ]/i
+const cat = (s: unknown, n: number) => String(s ?? '').trim().slice(0, n)
 
-Quy tắc cho "hinh" (mô tả để AI khác vẽ một ảnh tĩnh):
-- Tả đúng điều đang được kể trong "loi": ai có mặt, đang làm gì, biểu cảm gì, ở đâu, đồ vật nào được nhắc tới.
-- Gọi nhân vật bằng đúng TÊN trong danh sách nhân vật, không tả lại ngoại hình hay quần áo của họ.
-- Biểu cảm phóng đại kiểu hoạt hình (hóa đá, mắt lấp lánh, nước mắt chảy dài...). Mỗi cảnh một cảm xúc rõ.
-- Nêu cỡ cảnh khi cần: cận mặt, trung cảnh, toàn cảnh.
-- Không yêu cầu chữ trong ảnh. Không dùng tên người thật, người nổi tiếng hay nhãn hiệu thật.
-
-Viết tiếng Việt có dấu đầy đủ.`
-
-const SCHEMA = {
-  type: 'OBJECT',
-  properties: {
-    ten: { type: 'STRING', description: 'Tên mẩu chuyện, ngắn gọn, gây tò mò' },
-    canh: {
-      type: 'ARRAY',
-      items: {
-        type: 'OBJECT',
-        properties: {
-          loi: { type: 'STRING', description: 'Lời giọng đọc sẽ đọc trong cảnh này' },
-          hinh: { type: 'STRING', description: 'Mô tả ảnh cần vẽ cho cảnh này' },
-        },
-        required: ['loi', 'hinh'],
-      },
-    },
-  },
-  required: ['ten', 'canh'],
+// Gọi một agent: kiểm tra khóa trang, gọi Gemini ép JSON, bắt lỗi chữ không dấu
+async function goiAgent<T>(heThong: string, noiDung: string, schema: object, nhiet: number): Promise<{ ok: true; kq: T } | { ok: false; thongBao: string }> {
+  if (!(await daMoKhoa())) return { ok: false, thongBao: CHUA_MO }
+  try {
+    const chu = await goiGeminiJson(heThong, [{ role: 'user', parts: [{ text: noiDung }] }], schema, nhiet, 55_000)
+    if (!CO_DAU.test(chu)) return { ok: false, thongBao: 'AI trả về chữ không dấu, hãy bấm thử lại' }
+    return { ok: true, kq: JSON.parse(chu) as T }
+  } catch (e) {
+    return { ok: false, thongBao: e instanceof Error ? e.message : 'AI lỗi, hãy thử lại' }
+  }
 }
 
-export type BangCanh = { ok: true; ten: string; canh: { loi: string; hinh: string }[] } | { ok: false; thongBao: string }
+const CAM_CHUNG = 'Không dùng tên, hình ảnh của người thật, người nổi tiếng, nhân vật của phim hay kênh khác, nhãn hiệu thật. Viết tiếng Việt có dấu đầy đủ.'
 
-export async function vietBangCanh(yChinh: string, soCanh: number, nhanVat: { ten: string; moTa: string }[]): Promise<BangCanh> {
-  if (!(await daMoKhoa())) return { ok: false, thongBao: CHUA_MO }
-  const y = yChinh.trim().slice(0, 3000)
+// ---------------- Agent 1: nhân vật ----------------
+const HE_NV = `Bạn là AGENT THIẾT KẾ NHÂN VẬT cho phim hoạt hình 2D chibi, thể loại hài đời thường Việt Nam.
+Từ ý chính câu chuyện, lập danh sách nhân vật cần có (2-5 người). Nhân vật đã có sẵn thì GIỮ NGUYÊN tên và mô tả, chỉ thêm người còn thiếu, bỏ người không xuất hiện trong chuyện.
+Với mỗi nhân vật:
+- moTa: ngoại hình CỐ ĐỊNH, cụ thể để AI vẽ lại y hệt ở mọi cảnh: giới tính, tuổi, dáng người, khuôn mặt, kiểu tóc và màu tóc, quần áo với màu cụ thể, giày dép, một chi tiết nhận diện riêng. 1-2 câu, không dùng từ mơ hồ như "đẹp", "bình thường".
+- tinhCach: tính cách và vai trò trong chuyện, 1 câu.
+- giong: giọng nói để AI video lồng tiếng (nam hay nữ, tuổi, nhịp nói, sắc thái), 1 câu ngắn.
+Hai nhân vật phải khác nhau rõ ở dáng, tóc và màu quần áo. ${CAM_CHUNG}`
+
+export async function agentNhanVat(yChinh: string, phongCach: string, daCo: NhanVatAi[]): Promise<KetQua<{ nhanVat: NhanVatAi[] }>> {
+  const y = cat(yChinh, 3000)
   if (y.length < 20) return { ok: false, thongBao: 'Hãy kể ý chính câu chuyện dài hơn một chút (ít nhất vài câu)' }
-  const so = Math.min(14, Math.max(4, Math.round(soCanh) || 10))
-  const ds = nhanVat
-    .filter((n) => n.ten.trim())
+  const r = await goiAgent<{ nhan_vat?: { ten?: string; mo_ta?: string; tinh_cach?: string; giong?: string }[] }>(
+    HE_NV,
+    `Phong cách vẽ: ${cat(phongCach, 600)}\n\nNhân vật đã có:\n${daCo.filter((n) => n.ten.trim()).map((n) => `- ${n.ten}: ${n.moTa}`).join('\n') || '(chưa có)'}\n\nÝ chính câu chuyện:\n${y}`,
+    {
+      type: 'OBJECT',
+      properties: {
+        nhan_vat: {
+          type: 'ARRAY',
+          items: { type: 'OBJECT', properties: { ten: S({}), mo_ta: S({}), tinh_cach: S({}), giong: S({}) }, required: ['ten', 'mo_ta', 'tinh_cach', 'giong'] },
+        },
+      },
+      required: ['nhan_vat'],
+    },
+    0.7,
+  )
+  if (!r.ok) return r
+  const nhanVat = (r.kq.nhan_vat ?? [])
+    .map((n) => ({ ten: cat(n.ten, 40), moTa: cat(n.mo_ta, 400), tinhCach: cat(n.tinh_cach, 200), giong: cat(n.giong, 150) }))
+    .filter((n) => n.ten && n.moTa)
     .slice(0, 8)
-    .map((n) => `- ${n.ten.trim().slice(0, 40)}: ${n.moTa.trim().slice(0, 300)}`)
-    .join('\n')
-  try {
-    const chu = await goiGeminiJson(
-      QUY_TAC,
-      [{ role: 'user', parts: [{ text: `Danh sách nhân vật (nhân vật đầu tiên là người kể):\n${ds || '(chưa có, hãy tự đặt 2-3 nhân vật)'}\n\nÝ chính câu chuyện:\n${y}\n\nViết đúng ${so} cảnh.` }] }],
-      SCHEMA,
-      0.9,
-    )
-    const kq = JSON.parse(chu) as { ten?: string; canh?: { loi?: string; hinh?: string }[] }
-    const canh = (kq.canh ?? [])
-      .map((c) => ({ loi: (c.loi ?? '').trim().slice(0, 600), hinh: (c.hinh ?? '').trim().slice(0, 600) }))
-      .filter((c) => c.loi)
-      .slice(0, 20)
-    if (!canh.length) return { ok: false, thongBao: 'AI chưa viết được cảnh nào, hãy bấm thử lại' }
-    // Mô hình nhẹ đôi khi trả chữ không dấu: báo để viết lại thay vì dựng phim với lời sai
-    const tatCa = canh.map((c) => c.loi).join(' ')
-    if (!/[ăâđêôơưáàảãạéèẻẽẹíìỉĩịóòỏõọúùủũụýỳỷỹỵ]/i.test(tatCa)) return { ok: false, thongBao: 'AI trả về chữ không dấu, hãy bấm thử lại' }
-    return { ok: true, ten: (kq.ten ?? '').trim().slice(0, 100), canh }
-  } catch (e) {
-    return { ok: false, thongBao: e instanceof Error ? e.message : 'AI viết kịch bản lỗi' }
+  if (!nhanVat.length) return { ok: false, thongBao: 'Agent chưa tạo được nhân vật nào, hãy thử lại' }
+  return { ok: true, nhanVat }
+}
+
+// ---------------- Agent 2: kịch bản ----------------
+const HE_KB = (giay: number, soTu: number) => `Bạn là AGENT BIÊN KỊCH phim hoạt hình 2D chibi, thể loại HÀI ĐỜI THƯỜNG Việt Nam (không đổi sang thể loại khác).
+Mỗi cảnh là MỘT đoạn video liền mạch dài ${giay} giây do AI tạo video dựng, không cắt cảnh bên trong.
+Quy tắc:
+- Cấu trúc cả mẩu: câu mở gây tò mò → tình huống → sự cố → leo thang → cú lật bất ngờ → câu chốt. Chi tiết cài ở đầu phải được trả lại ở cuối.
+- bo_canh: tên ngắn của nơi diễn ra (ví dụ "Phòng khách nhà Tí"). Quay lại nơi cũ thì dùng ĐÚNG tên cũ. Cả mẩu chỉ nên có 2-4 bối cảnh.
+- nhan_vat: tên các nhân vật có mặt, đúng tên trong danh sách, tối đa 3 người một cảnh.
+- hanh_dong: chuyện xảy ra trong ${giay} giây, chỉ 1-2 hành động cụ thể nhìn thấy được.
+- loi: lời thoại trong cảnh, mỗi câu một dòng dạng "Tên: câu nói". Tổng tối đa ${soTu} từ để nói kịp trong ${giay} giây. Để trống nếu cảnh chỉ có hành động.
+- hinh: khung hình ĐẦU TIÊN của cảnh để vẽ ảnh tĩnh: ai đứng đâu (trái, giữa, phải), tư thế, biểu cảm, cỡ cảnh. Gọi nhân vật bằng tên, không tả lại ngoại hình hay quần áo.
+- Câu thoại ngắn, tự nhiên, đúng tính cách; cứ 2 cảnh có một chỗ gây cười. Biểu cảm phóng đại kiểu hoạt hình.
+- Không có chữ trong hình. ${CAM_CHUNG}`
+
+export async function agentKichBan(yChinh: string, soCanh: number, giay: number, nhanVat: NhanVatAi[]): Promise<KetQua<{ ten: string; canh: CanhAi[] }>> {
+  const y = cat(yChinh, 3000)
+  if (y.length < 20) return { ok: false, thongBao: 'Hãy kể ý chính câu chuyện dài hơn một chút (ít nhất vài câu)' }
+  const g = giay === 10 ? 10 : 8
+  const so = Math.min(14, Math.max(3, Math.round(soCanh) || 8))
+  const ds = nhanVat.filter((n) => n.ten.trim()).map((n) => `- ${n.ten}: ${n.tinhCach || n.moTa}`).join('\n')
+  const r = await goiAgent<{ ten?: string; canh?: { bo_canh?: string; nhan_vat?: string[]; hanh_dong?: string; loi?: string; hinh?: string }[] }>(
+    HE_KB(g, g === 10 ? 24 : 18),
+    `Nhân vật:\n${ds || '(chưa có, hãy tự đặt 2-3 nhân vật)'}\n\nÝ chính câu chuyện:\n${y}\n\nViết đúng ${so} cảnh.`,
+    {
+      type: 'OBJECT',
+      properties: {
+        ten: S({ description: 'Tên mẩu chuyện, ngắn, gây tò mò' }),
+        canh: {
+          type: 'ARRAY',
+          items: {
+            type: 'OBJECT',
+            properties: { bo_canh: S({}), nhan_vat: { type: 'ARRAY', items: S({}) }, hanh_dong: S({}), loi: S({}), hinh: S({}) },
+            required: ['bo_canh', 'nhan_vat', 'hanh_dong', 'loi', 'hinh'],
+          },
+        },
+      },
+      required: ['ten', 'canh'],
+    },
+    0.9,
+  )
+  if (!r.ok) return r
+  const canh = (r.kq.canh ?? [])
+    .map((c) => ({
+      boiCanh: cat(c.bo_canh, 80),
+      nhanVat: (c.nhan_vat ?? []).map((x) => cat(x, 40)).filter(Boolean).slice(0, 4),
+      hanhDong: cat(c.hanh_dong, 500),
+      loi: cat(c.loi, 500),
+      hinh: cat(c.hinh, 600),
+    }))
+    .filter((c) => c.hanhDong || c.loi)
+    .slice(0, 20)
+  if (!canh.length) return { ok: false, thongBao: 'Agent chưa viết được cảnh nào, hãy thử lại' }
+  return { ok: true, ten: cat(r.kq.ten, 100), canh }
+}
+
+// ---------------- Agent 3: bối cảnh ----------------
+const HE_BC = `Bạn là AGENT THIẾT KẾ BỐI CẢNH cho phim hoạt hình 2D chibi đời thường Việt Nam.
+Với MỖI bối cảnh trong danh sách (giữ đúng tên), viết mo_ta CỐ ĐỊNH, cụ thể để AI vẽ lại y hệt ở mọi cảnh: loại nơi chốn, ban ngày hay ban đêm, bố cục trái - giữa - phải, 3-5 đồ vật chính với màu cụ thể, màu tường / sàn / trời, ánh sáng. 2-3 câu.
+Bối cảnh vẽ TRỐNG, không có người. Bối cảnh đã có mô tả thì giữ nguyên. Đồ vật cần cho kịch bản (theo các hành động được liệt kê) phải có mặt. ${CAM_CHUNG}`
+
+export async function agentBoiCanh(phongCach: string, ten: string[], daCo: BoiCanhAi[], hanhDong: string[]): Promise<KetQua<{ boiCanh: BoiCanhAi[] }>> {
+  const ds = [...new Set(ten.map((t) => t.trim()).filter(Boolean))].slice(0, 8)
+  if (!ds.length) return { ok: false, thongBao: 'Kịch bản chưa có bối cảnh nào, hãy chạy agent kịch bản trước' }
+  const cu = new Map(daCo.map((b) => [b.ten.trim(), b.moTa]))
+  const r = await goiAgent<{ boi_canh?: { ten?: string; mo_ta?: string }[] }>(
+    HE_BC,
+    `Phong cách vẽ: ${cat(phongCach, 600)}\n\nCác bối cảnh cần thiết kế:\n${ds.map((t) => `- ${t}${cu.get(t) ? `: (đã có) ${cu.get(t)}` : ''}`).join('\n')}\n\nCác hành động diễn ra trong phim:\n${hanhDong.map((h) => `- ${cat(h, 200)}`).join('\n')}`,
+    {
+      type: 'OBJECT',
+      properties: { boi_canh: { type: 'ARRAY', items: { type: 'OBJECT', properties: { ten: S({}), mo_ta: S({}) }, required: ['ten', 'mo_ta'] } } },
+      required: ['boi_canh'],
+    },
+    0.6,
+  )
+  if (!r.ok) return r
+  const moi = new Map((r.kq.boi_canh ?? []).map((b) => [cat(b.ten, 80), cat(b.mo_ta, 600)]))
+  // Giữ đúng thứ tự và tên trong kịch bản; mô tả cũ của người dùng được ưu tiên
+  const boiCanh = ds.map((t) => ({ ten: t, moTa: cu.get(t) || moi.get(t) || [...moi.entries()].find(([k]) => k.toLowerCase() === t.toLowerCase())?.[1] || '' }))
+  return { ok: true, boiCanh }
+}
+
+// ---------------- Agent 4: câu lệnh video ----------------
+const HE_VD = (giay: number) => `Bạn là AGENT ĐẠO DIỄN VIDEO. Với từng cảnh, viết diễn biến để AI tạo video (như Veo trong Gemini) dựng một đoạn ${giay} giây liền mạch, bắt đầu từ ảnh khung đầu của cảnh.
+Với mỗi cảnh (giữ đúng số "so"):
+- dien_bien: 3-4 mốc thời gian liền nhau phủ kín từ 0 đến ${giay} giây. Mỗi mốc tả chính xác cử động nhìn thấy: ai, bộ phận nào, làm gì, biểu cảm ra sao. Khớp lời thoại: ai đang nói thì miệng người đó cử động, người kia phản ứng.
+- may_quay: một câu về cỡ cảnh và chuyển động máy (đứng yên, đẩy chậm vào, lia nhẹ...). Không cắt cảnh, không đổi góc đột ngột.
+- am_thanh: tiếng nền và tiếng động cụ thể của cảnh. Không nhạc có lời.
+Chỉ dùng những gì có trong cảnh: không thêm nhân vật, đồ vật hay nơi chốn mới, không đổi quần áo. Hành động nhỏ, vừa sức ${giay} giây. Tiếng Việt có dấu.`
+
+export async function agentVideo(
+  giay: number,
+  canh: { boiCanh: string; nhanVat: string[]; hanhDong: string; loi: string; hinh: string }[],
+): Promise<KetQua<{ video: (VideoAi | null)[] }>> {
+  const g = giay === 10 ? 10 : 8
+  if (!canh.length) return { ok: false, thongBao: 'Chưa có cảnh nào, hãy chạy agent kịch bản trước' }
+  const ds = canh
+    .slice(0, 20)
+    .map((c, i) => `Cảnh so=${i + 1}\n- Bối cảnh: ${cat(c.boiCanh, 80)}\n- Nhân vật: ${c.nhanVat.join(', ') || '(không rõ)'}\n- Khung đầu: ${cat(c.hinh, 400)}\n- Hành động: ${cat(c.hanhDong, 400)}\n- Lời thoại: ${cat(c.loi, 400) || '(không có)'}`)
+    .join('\n\n')
+  const r = await goiAgent<{ canh?: { so?: number; dien_bien?: { tu?: number; den?: number; viec?: string }[]; may_quay?: string; am_thanh?: string }[] }>(
+    HE_VD(g),
+    ds,
+    {
+      type: 'OBJECT',
+      properties: {
+        canh: {
+          type: 'ARRAY',
+          items: {
+            type: 'OBJECT',
+            properties: {
+              so: { type: 'INTEGER' },
+              dien_bien: {
+                type: 'ARRAY',
+                items: { type: 'OBJECT', properties: { tu: { type: 'NUMBER' }, den: { type: 'NUMBER' }, viec: S({}) }, required: ['tu', 'den', 'viec'] },
+              },
+              may_quay: S({}),
+              am_thanh: S({}),
+            },
+            required: ['so', 'dien_bien', 'may_quay', 'am_thanh'],
+          },
+        },
+      },
+      required: ['canh'],
+    },
+    0.6,
+  )
+  if (!r.ok) return r
+  const video: (VideoAi | null)[] = canh.map(() => null)
+  for (const c of r.kq.canh ?? []) {
+    const i = Math.round(Number(c.so)) - 1
+    if (i < 0 || i >= video.length) continue
+    const dienBien = (c.dien_bien ?? [])
+      .map((d) => ({ tu: Math.max(0, Math.min(g, Number(d.tu) || 0)), den: Math.max(0, Math.min(g, Number(d.den) || 0)), viec: cat(d.viec, 300) }))
+      .filter((d) => d.viec)
+      .slice(0, 6)
+    if (dienBien.length) video[i] = { dienBien, mayQuay: cat(c.may_quay, 200), amThanh: cat(c.am_thanh, 200) }
   }
+  if (!video.some(Boolean)) return { ok: false, thongBao: 'Agent chưa viết được câu lệnh video nào, hãy thử lại' }
+  return { ok: true, video }
 }
 
 // Đọc một đoạn lời (gồm vài cảnh liền nhau) thành giọng nói. Mỗi lần gọi tốn 1 lượt giọng Gemini.

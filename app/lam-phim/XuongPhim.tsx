@@ -3,13 +3,15 @@
 import { useEffect, useState } from 'react'
 import { KIEU, giaiMa, tachPhuDe, veChu } from '@/lib/dungVideo'
 import { GIONG } from '@/lib/giongDoc'
-import { docDoanPhim, vietBangCanh } from './actions'
+import { agentBoiCanh, agentKichBan, agentNhanVat, agentVideo, docDoanPhim, type VideoAi } from './actions'
 
-// Xưởng phim hoạt hình kể chuyện: bảng cảnh (lời đọc + mô tả hình) → chép câu lệnh vẽ ảnh → tải ảnh lên → dựng video 16:9.
+// Xưởng phim hoạt hình kể chuyện, có đội 4 agent:
+// 1) nhân vật (câu lệnh tờ mẫu cho Gemini)  2) kịch bản  3) bối cảnh (câu lệnh vẽ nền trống)  4) câu lệnh video 8/10 giây cho Gemini (Veo).
 // Chữ lưu trong trình duyệt (localStorage), ảnh lưu trong IndexedDB: tắt trang mở lại vẫn còn, nhưng chỉ trên máy này.
-type NhanVat = { ten: string; moTa: string }
-type Canh = { id: string; loi: string; hinh: string }
-type Phim = { ten: string; yChinh: string; phongCach: string; nhanVat: NhanVat[]; canh: Canh[] }
+type NhanVat = { ten: string; moTa: string; tinhCach?: string; giong?: string }
+type BoiCanh = { ten: string; moTa: string }
+type Canh = { id: string; loi: string; hinh: string; boiCanh?: string; nhanVat?: string[]; hanhDong?: string; video?: VideoAi | null }
+type Phim = { ten: string; yChinh: string; phongCach: string; giay: 8 | 10; nhanVat: NhanVat[]; boiCanh: BoiCanh[]; canh: Canh[] }
 
 const K = { rong: 1280, cao: 720, coChu: 40, viTriChu: 0.86 }
 const CHUYEN = 0.25 // giây chuyển mờ giữa hai cảnh
@@ -20,15 +22,17 @@ const ma = () => crypto.randomUUID()
 
 const MAU: Phim = {
   ten: 'Quỹ đen trong mũ bảo hiểm',
-  yChinh: '',
+  yChinh:
+    'Tí giấu hai triệu rưỡi tiền riêng trong cái mũ bảo hiểm cũ vì nghĩ vợ chê hôi không bao giờ đụng vào. Chị Na dọn nhà, đem cái mũ cho ông Bảy hàng xóm úp chậu lan. Tí chạy sang xin lại thì trong mũ chỉ còn tờ giấy: ông Bảy đã đưa tiền cho chị Na vì "chú cũng từng có vợ".',
   phongCach:
     'Hoạt hình 2D chibi, đầu to thân nhỏ, nét viền đen dày đều, màu phẳng tươi không đổ bóng, mắt tròn to tròng trắng con ngươi đen nhỏ, biểu cảm phóng đại, nền đơn giản ít chi tiết.',
+  giay: 8,
   nhanVat: [
-    { ten: 'Tí', moTa: 'nam 30 tuổi, hơi mũm mĩm, tóc đen ngắn rẽ ngôi lệch, áo thun cam, quần đùi xanh đậm, dép tổ ong vàng' },
-    { ten: 'Chị Na', moTa: 'nữ 28 tuổi, tóc nâu buộc đuôi ngựa cao, áo sơ mi xanh ngọc, quần dài trắng' },
-    { ten: 'Ông Bảy', moTa: 'nam 60 tuổi, đầu hói hai bên còn tóc bạc, ria mép bạc, áo ba lỗ trắng, quần pijama sọc xanh' },
-    { ten: 'Cu Bin', moTa: 'nam 30 tuổi, gầy cao, tóc xoăn xù, đeo kính tròn, áo khoác có mũ màu tím, quần jean' },
+    { ten: 'Tí', moTa: 'nam 30 tuổi, hơi mũm mĩm, tóc đen ngắn rẽ ngôi lệch, áo thun cam, quần đùi xanh đậm, dép tổ ong vàng', tinhCach: 'người chồng hay tính toán nhưng luôn thua vợ, tự kể chuyện', giong: 'giọng nam trẻ, nói nhanh, hài hước' },
+    { ten: 'Chị Na', moTa: 'nữ 28 tuổi, tóc nâu buộc đuôi ngựa cao, áo sơ mi xanh ngọc, quần dài trắng', tinhCach: 'người vợ tỉnh táo, luôn thắng', giong: 'giọng nữ trẻ, trong, tươi tắn' },
+    { ten: 'Ông Bảy', moTa: 'nam 60 tuổi, đầu hói hai bên còn tóc bạc, ria mép bạc, áo ba lỗ trắng, quần pijama sọc xanh', tinhCach: 'ông hàng xóm lắm chiêu', giong: 'giọng nam lớn tuổi, trầm, chậm rãi' },
   ],
+  boiCanh: [],
   canh: [
     ['Đàn ông có vợ, ai cũng có một kho báu. Của tôi là hai triệu rưỡi, giấu trong lớp lót cái mũ bảo hiểm cũ.', 'Phòng ngủ ban đêm, Tí rón rén nhét xấp tiền vào trong một cái mũ bảo hiểm cũ, mắt liếc ra cửa.'],
     ['Chỗ đó an toàn tuyệt đối. Vì cái mũ hôi tới mức vợ tôi không bao giờ đụng vào.', 'Trung cảnh: Tí ôm cái mũ bảo hiểm cũ, cười mãn nguyện, quanh mũ có vài làn khói xanh bốc mùi.'],
@@ -42,6 +46,12 @@ const MAU: Phim = {
     ['Về tới nhà, vợ tôi ôm chầm lấy tôi: Anh chu đáo ghê, còn nhờ chú Bảy đưa quà bất ngờ cho em.', 'Chị Na ngồi trên ghế sofa đếm tiền, mắt lấp lánh, bên cạnh có mấy túi đồ mới mua.'],
     ['Tôi cười: Ừ, bất ngờ thật. Bài học rút ra: đừng giấu tiền trong mũ. Lần sau tôi giấu ở… thôi, không nói được.', 'Cận mặt Tí cười méo xệch, hai hàng nước mắt chảy dài, tay giơ ngón cái run run.'],
   ].map(([loi, hinh], i) => ({ id: `mau-${i + 1}`, loi, hinh })),
+}
+
+// Bài cũ (trước khi có đội agent) thiếu vài trường: điền mặc định
+function chuanHoa(p: Partial<Phim> | null): Phim | null {
+  if (!p?.canh?.length) return null
+  return { ...MAU, ...p, giay: p.giay === 10 ? 10 : 8, nhanVat: p.nhanVat ?? [], boiCanh: p.boiCanh ?? [], canh: p.canh } as Phim
 }
 
 // Giọng đã đọc rồi thì giữ lại (tới khi tải lại trang): dựng lại vì đổi ảnh, bật tắt phụ đề không tốn thêm lượt
@@ -81,11 +91,37 @@ function taiAnh(u: string) {
 // ---- Câu lệnh dán vào Gemini ----
 const coTen = (chu: string, ten: string) => new RegExp(`(?<![\\p{L}\\p{N}])${ten.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![\\p{L}\\p{N}])`, 'iu').test(chu)
 
-function cauLenhCanh(p: Phim, c: Canh) {
-  const co = p.nhanVat.filter((n) => n.ten.trim() && coTen(c.hinh, n.ten))
+function nhanVatTrongCanh(p: Phim, c: Canh) {
+  const chu = `${c.hinh}\n${c.hanhDong ?? ''}\n${c.loi}`
+  return p.nhanVat.filter((n) => n.ten.trim() && ((c.nhanVat ?? []).some((t) => t.trim().toLowerCase() === n.ten.trim().toLowerCase()) || coTen(chu, n.ten)))
+}
+
+const timBoiCanh = (p: Phim, c: Canh) => p.boiCanh.find((b) => b.ten.trim().toLowerCase() === (c.boiCanh ?? '').trim().toLowerCase())
+
+function cauLenhMau(p: Phim, n: NhanVat) {
   return [
     p.phongCach.trim(),
-    co.length ? `Nhân vật trong cảnh (vẽ giống hệt ảnh mẫu tôi đính kèm):\n${co.map((n) => `- ${n.ten.trim()}: ${n.moTa.trim()}`).join('\n')}` : '',
+    'Vẽ tờ mẫu nhân vật trên nền trắng trơn: cùng một nhân vật đứng nhìn thẳng, nhìn nghiêng, nhìn sau lưng, và 4 khuôn mặt: vui, giận, khóc, ngạc nhiên. Giữ đúng tỉ lệ và màu sắc ở mọi tư thế.',
+    `Nhân vật: ${n.ten.trim()} — ${n.moTa.trim()}`,
+    'Không có chữ trong ảnh.',
+  ].join('\n\n')
+}
+
+function cauLenhBoiCanh(p: Phim, b: BoiCanh) {
+  return [
+    p.phongCach.trim(),
+    `Vẽ bối cảnh TRỐNG, không có người: ${b.ten.trim()} — ${b.moTa.trim()}`,
+    'Ảnh ngang tỉ lệ 16:9, góc nhìn ngang tầm mắt, chừa khoảng trống ở giữa và hai bên để sau này đặt nhân vật. Không có chữ, không có logo.',
+  ].join('\n\n')
+}
+
+function cauLenhCanh(p: Phim, c: Canh) {
+  const co = nhanVatTrongCanh(p, c)
+  const bc = timBoiCanh(p, c)
+  return [
+    p.phongCach.trim(),
+    co.length ? `Nhân vật trong cảnh (vẽ giống hệt tờ mẫu tôi đính kèm):\n${co.map((n) => `- ${n.ten.trim()}: ${n.moTa.trim()}`).join('\n')}` : '',
+    bc ? `Bối cảnh (giữ y hệt ảnh bối cảnh tôi đính kèm): ${bc.ten.trim()} — ${bc.moTa.trim()}` : '',
     `Cảnh cần vẽ: ${c.hinh.trim()}`,
     'Ảnh ngang tỉ lệ 16:9. Không có chữ, không có logo trong ảnh.',
   ]
@@ -93,14 +129,46 @@ function cauLenhCanh(p: Phim, c: Canh) {
     .join('\n\n')
 }
 
-function cauLenhMau(p: Phim, n: NhanVat) {
+function cauLenhVideo(p: Phim, c: Canh) {
+  const co = nhanVatTrongCanh(p, c)
+  const bc = timBoiCanh(p, c)
+  const g = p.giay
+  const dinhKem = ['ảnh khung đầu của cảnh này', ...co.map((n) => `tờ mẫu ${n.ten.trim()}`), ...(bc ? [`ảnh bối cảnh "${bc.ten.trim()}"`] : [])]
+  const dienBien = c.video?.dienBien?.length
+    ? c.video.dienBien.map((d) => `${d.tu}-${d.den} giây: ${d.viec}`).join('\n')
+    : `0-${g} giây: ${(c.hanhDong || c.hinh).trim()}`
+  const loi = c.loi
+    .split('\n')
+    .map((d) => d.trim())
+    .filter(Boolean)
+    .map((d) => {
+      const m = d.match(/^([^:]{1,30}):\s*(.+)$/)
+      return m ? `${m[1].trim()}: "${m[2].trim().replace(/^"|"$/g, '')}"` : `Người kể: "${d}"`
+    })
   return [
-    p.phongCach.trim(),
-    'Vẽ tờ mẫu nhân vật trên nền trắng trơn: cùng một nhân vật đứng nhìn thẳng, nhìn nghiêng, nhìn sau lưng, và 4 khuôn mặt: vui, giận, khóc, ngạc nhiên.',
-    `Nhân vật: ${n.ten.trim()} — ${n.moTa.trim()}`,
-    'Không có chữ trong ảnh.',
-  ].join('\n\n')
+    `Tạo video hoạt hình dài ${g} giây, MỘT cảnh quay liền, không cắt cảnh.`,
+    `PHONG CÁCH: ${p.phongCach.trim()} Giữ đúng nét vẽ, nhân vật và bối cảnh như các ảnh tham chiếu.`,
+    `ẢNH ĐÍNH KÈM: ${dinhKem.join(', ')}. Khung hình đầu tiên phải giống ảnh khung đầu.`,
+    co.length ? `NHÂN VẬT (giữ y hệt tờ mẫu, không đổi mặt, tóc, quần áo):\n${co.map((n) => `- ${n.ten.trim()}: ${n.moTa.trim()}.${n.giong ? ` Giọng: ${n.giong.trim()}.` : ''}`).join('\n')}` : '',
+    bc ? `BỐI CẢNH (giữ y hệt ảnh bối cảnh): ${bc.ten.trim()} — ${bc.moTa.trim()}` : '',
+    `DIỄN BIẾN:\n${dienBien}`,
+    c.video?.mayQuay ? `MÁY QUAY: ${c.video.mayQuay}` : 'MÁY QUAY: đứng yên, giữ nguyên khung hình.',
+    loi.length ? `LỜI THOẠI (tiếng Việt, nhép miệng đúng người đang nói):\n${loi.join('\n')}` : 'LỜI THOẠI: không có.',
+    c.video?.amThanh ? `ÂM THANH: ${c.video.amThanh}` : '',
+    'CẤM: chữ, phụ đề, logo, thêm nhân vật khác, đổi trang phục, đổi bối cảnh, cắt cảnh, chuyển sang 3D hay người thật.',
+  ]
+    .filter(Boolean)
+    .join('\n\n')
 }
+
+// Lời để giọng máy đọc: bỏ tên người nói ở đầu dòng ("Tí: ...")
+const loiDeDoc = (s: string) =>
+  s
+    .split('\n')
+    .map((d) => d.replace(/^\s*[^:\n]{1,30}:\s*/, '').trim())
+    .filter(Boolean)
+    .join(' ')
+    .replace(/\s+/g, ' ')
 
 // ---- Vẽ một khung hình ----
 function veCanh(g: CanvasRenderingContext2D, a: HTMLImageElement | null, so: number, tienDo: number) {
@@ -114,15 +182,13 @@ function veCanh(g: CanvasRenderingContext2D, a: HTMLImageElement | null, so: num
     g.fillText(`Cảnh ${so + 1} (chưa có ảnh)`, K.rong / 2, K.cao * 0.42)
     return
   }
-  // Ảnh gần đúng 16:9 thì phủ kín khung; lệch nhiều (ảnh vuông, ảnh dọc) thì thu vừa khung để không cắt mất nhân vật
   const lech = a.width / a.height / (K.rong / K.cao)
   const vua = lech > 0.85 && lech < 1.18 ? Math.max(K.rong / a.width, K.cao / a.height) : Math.min(K.rong / a.width, K.cao / a.height)
-  // Phóng nhẹ: cảnh chẵn tiến vào, cảnh lẻ lùi ra
   const tl = vua * (1 + 0.06 * (so % 2 ? 1 - tienDo : tienDo))
   g.drawImage(a, (K.rong - a.width * tl) / 2, (K.cao - a.height * tl) / 2, a.width * tl, a.height * tl)
 }
 
-function NutChep({ chu, nhan = 'Chép' }: { chu: string; nhan?: string }) {
+function NutChep({ chu, nhan = 'Chép', chinh = false }: { chu: string; nhan?: string; chinh?: boolean }) {
   const [da, setDa] = useState(false)
   return (
     <button
@@ -133,7 +199,7 @@ function NutChep({ chu, nhan = 'Chép' }: { chu: string; nhan?: string }) {
           setTimeout(() => setDa(false), 1500)
         })
       }
-      className="shrink-0 rounded-md border border-slate-300 bg-white px-2 py-1 text-xs font-semibold hover:border-chinh hover:text-chinh"
+      className={`shrink-0 rounded-md border px-2 py-1 text-xs font-semibold ${chinh ? 'border-chinh bg-chinh text-white hover:bg-chinh-dam' : 'border-slate-300 bg-white hover:border-chinh hover:text-chinh'}`}
     >
       {da ? 'Đã chép ✓' : nhan}
     </button>
@@ -143,13 +209,24 @@ function NutChep({ chu, nhan = 'Chép' }: { chu: string; nhan?: string }) {
 const O = 'w-full rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm'
 const KHUNG = 'mt-6 rounded-xl border border-slate-200 bg-white p-4'
 
+type MaAgent = 'nv' | 'kb' | 'bc' | 'vd'
+const TEN_AGENT: Record<MaAgent, string> = { nv: 'Agent nhân vật', kb: 'Agent kịch bản', bc: 'Agent bối cảnh', vd: 'Agent câu lệnh video' }
+
+function NutAgent({ ma, dang, tat, chay, nhan }: { ma: MaAgent; dang: MaAgent | null; tat: boolean; chay: () => void; nhan: string }) {
+  return (
+    <button type="button" onClick={chay} disabled={tat} className="rounded-lg bg-chinh px-3 py-1.5 text-sm font-semibold text-white hover:bg-chinh-dam disabled:opacity-50">
+      {dang === ma ? `${TEN_AGENT[ma]} đang làm…` : nhan}
+    </button>
+  )
+}
+
 export default function XuongPhim({ coAi }: { coAi: boolean }) {
   const [phim, setPhim] = useState<Phim>(MAU)
   const [anh, setAnh] = useState<Record<string, string>>({})
   const [san, setSan] = useState(false)
-  const [soCanh, setSoCanh] = useState(10)
-  const [dangViet, setDangViet] = useState(false)
-  const [loiViet, setLoiViet] = useState('')
+  const [soCanh, setSoCanh] = useState(8)
+  const [dangAgent, setDangAgent] = useState<MaAgent | null>(null)
+  const [tinAgent, setTinAgent] = useState<{ loai: 'ok' | 'loi'; chu: string } | null>(null)
   const [giong, setGiong] = useState('Puck')
   const [phuDe, setPhuDe] = useState(true)
   const [buoc, setBuoc] = useState('')
@@ -162,9 +239,9 @@ export default function XuongPhim({ coAi }: { coAi: boolean }) {
     ;(async () => {
       let luu: Phim | null = null
       try {
-        luu = JSON.parse(localStorage.getItem(KHOA_LUU) ?? 'null')
+        luu = chuanHoa(JSON.parse(localStorage.getItem(KHOA_LUU) ?? 'null'))
       } catch {}
-      const p = luu?.canh?.length ? luu : MAU
+      const p = luu ?? MAU
       const url: Record<string, string> = {}
       await Promise.all(
         p.canh.map(async (c) => {
@@ -183,7 +260,10 @@ export default function XuongPhim({ coAi }: { coAi: boolean }) {
   }, [])
 
   useEffect(() => {
-    if (san) localStorage.setItem(KHOA_LUU, JSON.stringify(phim))
+    if (!san) return
+    try {
+      localStorage.setItem(KHOA_LUU, JSON.stringify(phim))
+    } catch {}
   }, [phim, san])
 
   useEffect(() => () => void (video && URL.revokeObjectURL(video.url)), [video])
@@ -191,6 +271,7 @@ export default function XuongPhim({ coAi }: { coAi: boolean }) {
   const sua = (p: Partial<Phim>) => setPhim((x) => ({ ...x, ...p }))
   const suaCanh = (id: string, p: Partial<Canh>) => setPhim((x) => ({ ...x, canh: x.canh.map((c) => (c.id === id ? { ...c, ...p } : c)) }))
   const suaNhanVat = (i: number, p: Partial<NhanVat>) => setPhim((x) => ({ ...x, nhanVat: x.nhanVat.map((n, j) => (j === i ? { ...n, ...p } : n)) }))
+  const suaBoiCanh = (i: number, p: Partial<BoiCanh>) => setPhim((x) => ({ ...x, boiCanh: x.boiCanh.map((b, j) => (j === i ? { ...b, ...p } : b)) }))
 
   function boAnh(ids: string[]) {
     for (const id of ids) {
@@ -225,59 +306,90 @@ export default function XuongPhim({ coAi }: { coAi: boolean }) {
     })
   }
 
-  async function aiViet() {
-    setLoiViet('')
-    if (phim.canh.some((c) => c.loi.trim()) && !confirm('AI sẽ viết bảng cảnh mới thay cho bảng cảnh đang có (ảnh đã tải lên cũng bị bỏ). Tiếp tục?')) return
-    setDangViet(true)
+  // ---- Đội agent ----
+  // Mỗi agent nhận bản phim mới nhất và trả về bản đã cập nhật (để "Chạy cả đội" nối tiếp được)
+  async function lamAgent(maAgent: MaAgent, p: Phim): Promise<Phim> {
+    setDangAgent(maAgent)
+    if (maAgent === 'nv') {
+      const r = await agentNhanVat(p.yChinh, p.phongCach, p.nhanVat.map((n) => ({ ten: n.ten, moTa: n.moTa, tinhCach: n.tinhCach ?? '', giong: n.giong ?? '' })))
+      if (!r.ok) throw new Error(r.thongBao)
+      return { ...p, nhanVat: r.nhanVat }
+    }
+    if (maAgent === 'kb') {
+      const r = await agentKichBan(p.yChinh, soCanh, p.giay, p.nhanVat.map((n) => ({ ten: n.ten, moTa: n.moTa, tinhCach: n.tinhCach ?? '', giong: n.giong ?? '' })))
+      if (!r.ok) throw new Error(r.thongBao)
+      boAnh(p.canh.map((c) => c.id))
+      return { ...p, ten: r.ten || p.ten, canh: r.canh.map((c) => ({ id: ma(), ...c, video: null })) }
+    }
+    if (maAgent === 'bc') {
+      const ten = p.canh.map((c) => c.boiCanh ?? '').filter(Boolean)
+      const r = await agentBoiCanh(p.phongCach, ten, p.boiCanh, p.canh.map((c) => c.hanhDong || c.hinh))
+      if (!r.ok) throw new Error(r.thongBao)
+      return { ...p, boiCanh: r.boiCanh }
+    }
+    const r = await agentVideo(
+      p.giay,
+      p.canh.map((c) => ({ boiCanh: c.boiCanh ?? '', nhanVat: c.nhanVat ?? nhanVatTrongCanh(p, c).map((n) => n.ten), hanhDong: c.hanhDong ?? '', loi: c.loi, hinh: c.hinh })),
+    )
+    if (!r.ok) throw new Error(r.thongBao)
+    return { ...p, canh: p.canh.map((c, i) => ({ ...c, video: r.video[i] ?? c.video ?? null })) }
+  }
+
+  async function chayAgent(ds: MaAgent[]) {
+    setTinAgent(null)
+    if (ds.includes('kb') && phim.canh.some((c) => c.loi.trim() || anh[c.id]) && !confirm('Agent kịch bản sẽ viết bảng cảnh mới thay cho bảng cảnh đang có (ảnh đã tải lên cũng bị bỏ). Tiếp tục?')) return
+    let p = phim
+    let xong = 0
     try {
-      const r = await vietBangCanh(phim.yChinh, soCanh, phim.nhanVat)
-      if (!r.ok) return setLoiViet(r.thongBao)
-      boAnh(phim.canh.map((c) => c.id))
+      for (const m of ds) {
+        p = await lamAgent(m, p)
+        setPhim(p)
+        xong++
+      }
       setVideo(null)
-      setPhim((x) => ({ ...x, ten: r.ten || x.ten, canh: r.canh.map((c) => ({ id: ma(), ...c })) }))
-    } catch {
-      setLoiViet('Không gọi được AI, hãy thử lại')
+      setTinAgent({ loai: 'ok', chu: ds.length > 1 ? 'Cả đội đã làm xong. Kéo xuống để chép câu lệnh.' : `${TEN_AGENT[ds[0]]} đã làm xong.` })
+    } catch (e) {
+      const ten = TEN_AGENT[ds[xong]]
+      setTinAgent({ loai: 'loi', chu: `${ten} gặp lỗi: ${e instanceof Error ? e.message : 'không gọi được AI'}.${xong ? ' Các agent trước đã làm xong, bấm lại nút của agent này để làm tiếp.' : ''}` })
     } finally {
-      setDangViet(false)
+      setDangAgent(null)
     }
   }
 
   function mauMoi() {
-    if (!confirm('Xóa bảng cảnh và ảnh đang có để làm mẩu chuyện mới? (Nhân vật và phong cách được giữ lại)')) return
+    if (!confirm('Xóa bảng cảnh, bối cảnh và ảnh đang có để làm mẩu chuyện mới? (Nhân vật và phong cách được giữ lại)')) return
     boAnh(phim.canh.map((c) => c.id))
     setVideo(null)
-    setPhim((x) => ({ ...x, ten: '', yChinh: '', canh: [{ id: ma(), loi: '', hinh: '' }] }))
+    setPhim((x) => ({ ...x, ten: '', yChinh: '', boiCanh: [], canh: [{ id: ma(), loi: '', hinh: '' }] }))
   }
 
-  const coLoi = phim.canh.filter((c) => c.loi.trim())
-  const sach = (s: string) => s.trim().replace(/\s+/g, ' ')
+  const coLoi = phim.canh.filter((c) => loiDeDoc(c.loi))
   // Gom các cảnh liền nhau thành từng đoạn, mỗi đoạn một lượt giọng đọc
   const nhom: Canh[][] = []
   for (const c of coLoi) {
     const cuoi = nhom.at(-1)
-    if (cuoi && cuoi.reduce((s, x) => s + sach(x.loi).length + 1, 0) + sach(c.loi).length <= TOI_DA_DOAN) cuoi.push(c)
+    if (cuoi && cuoi.reduce((s, x) => s + loiDeDoc(x.loi).length + 1, 0) + loiDeDoc(c.loi).length <= TOI_DA_DOAN) cuoi.push(c)
     else nhom.push([c])
   }
-  const tongChu = coLoi.reduce((s, c) => s + sach(c.loi).length, 0)
+  const tongChu = coLoi.reduce((s, c) => s + loiDeDoc(c.loi).length, 0)
   const uocGiay = Math.round(tongChu / 14)
   const soAnh = coLoi.filter((c) => anh[c.id]).length
-  const luotMoi = nhom.filter((n) => !giongDaDoc.has(`${giong}|${n.map((c) => sach(c.loi)).join('\n')}`)).length
+  const luotMoi = nhom.filter((n) => !giongDaDoc.has(`${giong}|${n.map((c) => loiDeDoc(c.loi)).join('\n')}`)).length
 
   async function dung() {
     setLoi('')
     setVideo(null)
     if (!coLoi.length) return setLoi('Bảng cảnh chưa có lời đọc nào')
-    const qua = coLoi.findIndex((c) => sach(c.loi).length > TOI_DA_DOAN)
+    const qua = coLoi.findIndex((c) => loiDeDoc(c.loi).length > TOI_DA_DOAN)
     if (qua >= 0) return setLoi(`Lời đọc của cảnh ${phim.canh.indexOf(coLoi[qua]) + 1} quá dài, hãy tách thành hai cảnh`)
     const kieu = KIEU.find((k) => typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported(k))
     if (!kieu) return setLoi('Trình duyệt này không quay được video, hãy dùng Chrome hoặc Edge bản mới')
     const ac = new AudioContext()
     try {
-      // 1) Giọng đọc từng đoạn
       const am: AudioBuffer[] = []
       for (let i = 0; i < nhom.length; i++) {
         setBuoc(`Giọng AI đang đọc đoạn ${i + 1}/${nhom.length}…`)
-        const chu = nhom[i].map((c) => sach(c.loi)).join('\n')
+        const chu = nhom[i].map((c) => loiDeDoc(c.loi)).join('\n')
         const khoa = `${giong}|${chu}`
         let b64 = giongDaDoc.get(khoa)
         if (!b64) {
@@ -296,18 +408,17 @@ export default function XuongPhim({ coAi }: { coAi: boolean }) {
       }
       const tong = ghep.duration
 
-      // 2) Lịch chiếu: trong mỗi đoạn, cảnh dài theo số chữ; trong mỗi cảnh, phụ đề cũng chia theo số chữ
       setBuoc('Đang nạp ảnh…')
       const lich: { tu: number; den: number; a: HTMLImageElement | null; so: number; pd: { d: string; den: number }[] }[] = []
       let moc = 0
       for (let i = 0; i < nhom.length; i++) {
-        const nang = nhom[i].map((c) => sach(c.loi).length + 12)
+        const nang = nhom[i].map((c) => loiDeDoc(c.loi).length + 12)
         const tongNang = nang.reduce((x, y) => x + y, 0)
         for (let j = 0; j < nhom[i].length; j++) {
           const c = nhom[i][j]
           const tu = moc
           const den = (moc += (nang[j] / tongNang) * am[i].duration)
-          const doan = tachPhuDe(sach(c.loi))
+          const doan = tachPhuDe(loiDeDoc(c.loi))
           const nangPd = doan.map((d) => d.length + 8)
           const tongPd = nangPd.reduce((x, y) => x + y, 0)
           let mocPd = tu
@@ -321,7 +432,6 @@ export default function XuongPhim({ coAi }: { coAi: boolean }) {
         }
       }
 
-      // 3) Vẽ + quay theo thời gian thực
       const c = document.createElement('canvas')
       c.width = K.rong
       c.height = K.cao
@@ -381,12 +491,14 @@ export default function XuongPhim({ coAi }: { coAi: boolean }) {
 
   if (!san) return <p className="mt-6 animate-pulse text-sm text-phu">Đang mở bài làm dở…</p>
 
-  const ban = !!buoc || dangViet
-  const tenTep = (phim.ten.trim() || 'phim-hoat-hinh').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/gi, 'd').replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-|-$/g, '').toLowerCase()
+  const ban = !!buoc || !!dangAgent
+  const tatAi = ban || !coAi
+  const tenTep = (phim.ten.trim() || 'phim-hoat-hinh').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/gi, 'd').replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-|-$/g, '').toLowerCase()
+  const tenBoiCanh = [...new Set([...phim.boiCanh.map((b) => b.ten), ...phim.canh.map((c) => c.boiCanh ?? '')].map((t) => t.trim()).filter(Boolean))]
 
   return (
     <div>
-      {/* 1. Câu chuyện */}
+      {/* 1. Câu chuyện + đội agent */}
       <section className={KHUNG}>
         <h2 className="text-lg font-bold">1. Câu chuyện</h2>
         <label className="mt-3 grid gap-1 text-sm font-medium">
@@ -404,71 +516,106 @@ export default function XuongPhim({ coAi }: { coAi: boolean }) {
             className={`${O} font-normal`}
           />
         </label>
-        <div className="mt-3 flex flex-wrap items-center gap-2">
-          <select value={soCanh} onChange={(e) => setSoCanh(Number(e.target.value))} disabled={ban} className="rounded-md border border-slate-300 px-2 py-1.5 text-sm">
-            {[6, 8, 10, 12].map((n) => (
-              <option key={n} value={n}>
-                {n} cảnh (khoảng {Math.round((n * 10) / 6) / 10} phút)
-              </option>
-            ))}
-          </select>
-          <button type="button" onClick={aiViet} disabled={ban || !coAi} className="rounded-lg bg-chinh px-3 py-1.5 text-sm font-semibold text-white hover:bg-chinh-dam disabled:opacity-50">
-            {dangViet ? 'AI đang viết…' : 'AI viết bảng cảnh'}
-          </button>
-          <button type="button" onClick={mauMoi} disabled={ban} className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-semibold hover:bg-slate-50 disabled:opacity-50">
-            Làm mẩu mới
-          </button>
+        <div className="mt-3 flex flex-wrap items-center gap-3 text-sm">
+          <label className="flex items-center gap-2">
+            Mỗi đoạn video dài
+            <select value={phim.giay} onChange={(e) => sua({ giay: Number(e.target.value) === 10 ? 10 : 8 })} disabled={ban} className="rounded-md border border-slate-300 px-2 py-1.5">
+              <option value={8}>8 giây</option>
+              <option value={10}>10 giây</option>
+            </select>
+          </label>
+          <label className="flex items-center gap-2">
+            Số cảnh
+            <select value={soCanh} onChange={(e) => setSoCanh(Number(e.target.value))} disabled={ban} className="rounded-md border border-slate-300 px-2 py-1.5">
+              {[4, 6, 8, 10, 12].map((n) => (
+                <option key={n} value={n}>
+                  {n} cảnh (khoảng {Math.round((n * phim.giay) / 6) / 10} phút)
+                </option>
+              ))}
+            </select>
+          </label>
         </div>
-        {!coAi && <p className="mt-2 text-xs text-amber-700">Trang chưa cài khóa Gemini nên AI chưa viết được. Bạn vẫn tự gõ bảng cảnh ở mục 3 được.</p>}
-        {loiViet && <p className="mt-2 text-sm text-red-600">{loiViet}</p>}
-        <p className="mt-2 text-xs text-phu">Trang mở sẵn một mẩu ví dụ để bạn làm thử. Bạn sửa được mọi ô; bài làm dở tự lưu trên máy này.</p>
+
+        <div className="mt-4 rounded-lg bg-nen p-3">
+          <p className="text-sm font-semibold">Đội agent</p>
+          <ol className="mt-1 list-decimal space-y-0.5 pl-5 text-xs text-phu">
+            <li>Agent nhân vật: thiết kế nhân vật và viết câu lệnh vẽ tờ mẫu cho Gemini.</li>
+            <li>Agent kịch bản: chia câu chuyện thành từng cảnh {phim.giay} giây, có lời thoại và hành động.</li>
+            <li>Agent bối cảnh: tả từng nơi chốn và viết câu lệnh vẽ ảnh nền trống cho Gemini.</li>
+            <li>Agent câu lệnh video: viết câu lệnh {phim.giay} giây cho từng cảnh để dán vào Gemini làm video.</li>
+          </ol>
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => chayAgent(['nv', 'kb', 'bc', 'vd'])}
+              disabled={tatAi}
+              className="rounded-lg bg-slate-900 px-4 py-1.5 text-sm font-semibold text-white hover:bg-slate-700 disabled:opacity-50"
+            >
+              {dangAgent ? `${TEN_AGENT[dangAgent]} đang làm…` : 'Chạy cả đội (4 agent)'}
+            </button>
+            <button type="button" onClick={mauMoi} disabled={ban} className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-semibold hover:bg-white disabled:opacity-50">
+              Làm mẩu mới
+            </button>
+          </div>
+          <p className="mt-2 text-xs text-phu">Cả đội tốn 4 lượt AI viết chữ, chạy khoảng 1-2 phút. Mỗi agent cũng có nút riêng ở mục của nó để làm lại phần đó.</p>
+          {tinAgent && <p className={`mt-2 text-sm ${tinAgent.loai === 'ok' ? 'text-green-700' : 'text-red-600'}`}>{tinAgent.chu}</p>}
+        </div>
+        {!coAi && <p className="mt-2 text-xs text-amber-700">Trang chưa cài khóa Gemini nên các agent chưa chạy được. Bạn vẫn tự gõ các mục bên dưới được.</p>}
       </section>
 
       {/* 2. Nhân vật */}
       <section className={KHUNG}>
-        <details>
-          <summary className="cursor-pointer text-lg font-bold">2. Nhân vật và phong cách vẽ (làm một lần, dùng cho mọi mẩu)</summary>
-          <ol className="mt-3 list-decimal space-y-0.5 pl-5 text-xs text-phu">
-            <li>Với mỗi nhân vật, bấm Chép câu lệnh tờ mẫu, dán vào Gemini để vẽ.</li>
-            <li>Lưu tờ ảnh mẫu ưng ý về máy. Từ đó mỗi lần vẽ cảnh, đính kèm tờ mẫu của các nhân vật có trong cảnh.</li>
-          </ol>
-          <label className="mt-3 grid gap-1 text-sm font-medium">
-            Phong cách chung (tự chèn vào mọi câu lệnh)
-            <textarea value={phim.phongCach} rows={3} maxLength={800} onChange={(e) => sua({ phongCach: e.target.value })} className={`${O} font-normal`} />
-          </label>
-          <ul className="mt-3 space-y-2">
-            {phim.nhanVat.map((n, i) => (
-              <li key={i} className="grid gap-2 rounded-lg bg-nen p-2 sm:grid-cols-[9rem_1fr_auto]">
+        <div className="flex flex-wrap items-center gap-3">
+          <h2 className="text-lg font-bold">2. Nhân vật</h2>
+          <NutAgent ma="nv" dang={dangAgent} tat={tatAi} chay={() => chayAgent(['nv'])} nhan="Agent nhân vật" />
+        </div>
+        <ol className="mt-2 list-decimal space-y-0.5 pl-5 text-xs text-phu">
+          <li>Bấm Chép câu lệnh tờ mẫu của từng nhân vật, dán vào Gemini để vẽ.</li>
+          <li>Lưu tờ mẫu ưng ý về máy. Từ đó mỗi lần làm ảnh hay video, đính kèm tờ mẫu của các nhân vật có trong cảnh.</li>
+        </ol>
+        <label className="mt-3 grid gap-1 text-sm font-medium">
+          Phong cách chung (tự chèn vào mọi câu lệnh)
+          <textarea value={phim.phongCach} rows={2} maxLength={800} onChange={(e) => sua({ phongCach: e.target.value })} className={`${O} font-normal`} />
+        </label>
+        <ul className="mt-3 space-y-2">
+          {phim.nhanVat.map((n, i) => (
+            <li key={i} className="grid gap-2 rounded-lg bg-nen p-2">
+              <div className="grid gap-2 sm:grid-cols-[9rem_1fr]">
                 <input value={n.ten} maxLength={40} placeholder="Tên" onChange={(e) => suaNhanVat(i, { ten: e.target.value })} className={O} />
-                <input value={n.moTa} maxLength={300} placeholder="Tuổi, dáng người, tóc, quần áo" onChange={(e) => suaNhanVat(i, { moTa: e.target.value })} className={O} />
-                <span className="flex items-center gap-2">
-                  <NutChep chu={cauLenhMau(phim, n)} nhan="Chép câu lệnh tờ mẫu" />
-                  <button type="button" onClick={() => sua({ nhanVat: phim.nhanVat.filter((_, j) => j !== i) })} className="text-xs text-red-600 hover:underline">
-                    Xóa
-                  </button>
-                </span>
-              </li>
-            ))}
-          </ul>
-          <button type="button" onClick={() => sua({ nhanVat: [...phim.nhanVat, { ten: '', moTa: '' }] })} className="mt-2 text-sm font-semibold text-chinh hover:underline">
-            + Thêm nhân vật
-          </button>
-          <p className="mt-2 text-xs text-phu">Nhân vật đầu tiên là người kể chuyện. Đừng dùng tên, hình ảnh của người thật hay nhân vật của kênh khác.</p>
-        </details>
+                <textarea value={n.moTa} rows={2} maxLength={400} placeholder="Ngoại hình cố định: tuổi, dáng, tóc, quần áo, màu sắc" onChange={(e) => suaNhanVat(i, { moTa: e.target.value })} className={O} />
+              </div>
+              <div className="grid gap-2 sm:grid-cols-2">
+                <input value={n.tinhCach ?? ''} maxLength={200} placeholder="Tính cách, vai trò" onChange={(e) => suaNhanVat(i, { tinhCach: e.target.value })} className={O} />
+                <input value={n.giong ?? ''} maxLength={150} placeholder="Giọng nói (cho video)" onChange={(e) => suaNhanVat(i, { giong: e.target.value })} className={O} />
+              </div>
+              <span className="flex items-center gap-2">
+                <NutChep chu={cauLenhMau(phim, n)} nhan="Chép câu lệnh tờ mẫu" chinh />
+                <button type="button" onClick={() => sua({ nhanVat: phim.nhanVat.filter((_, j) => j !== i) })} className="text-xs text-red-600 hover:underline">
+                  Xóa
+                </button>
+              </span>
+            </li>
+          ))}
+        </ul>
+        <button type="button" onClick={() => sua({ nhanVat: [...phim.nhanVat, { ten: '', moTa: '' }] })} className="mt-2 text-sm font-semibold text-chinh hover:underline">
+          + Thêm nhân vật
+        </button>
+        <p className="mt-2 text-xs text-phu">Đừng dùng tên, hình ảnh của người thật hay nhân vật của kênh khác.</p>
       </section>
 
-      {/* 3. Bảng cảnh */}
+      {/* 3. Kịch bản */}
       <section className={KHUNG}>
-        <h2 className="text-lg font-bold">3. Bảng cảnh ({phim.canh.length} cảnh)</h2>
-        <p className="mt-1 text-xs text-phu">
-          Với từng cảnh: bấm Chép câu lệnh vẽ, dán vào Gemini cùng tờ ảnh mẫu nhân vật, tải ảnh về rồi bấm Chọn ảnh. Cảnh chưa có ảnh vẫn dựng thử được (hiện nền tối).
-        </p>
+        <div className="flex flex-wrap items-center gap-3">
+          <h2 className="text-lg font-bold">3. Kịch bản ({phim.canh.length} cảnh)</h2>
+          <NutAgent ma="kb" dang={dangAgent} tat={tatAi} chay={() => chayAgent(['kb'])} nhan="Agent kịch bản" />
+        </div>
+        <p className="mt-1 text-xs text-phu">Mỗi cảnh là một đoạn video {phim.giay} giây. Lời thoại viết mỗi câu một dòng dạng &quot;Tên: câu nói&quot;.</p>
         <ul className="mt-3 space-y-3">
           {phim.canh.map((c, i) => (
             <li key={c.id} className="rounded-lg border border-slate-200 p-3">
               <div className="flex items-center gap-2 text-sm">
                 <span className="font-bold">Cảnh {i + 1}</span>
-                <span className="text-xs text-phu">khoảng {Math.max(1, Math.round(sach(c.loi).length / 14))} giây</span>
+                {c.boiCanh && <span className="rounded bg-nen px-1.5 text-xs text-phu">{c.boiCanh}</span>}
                 <span className="ml-auto flex items-center gap-3 text-xs">
                   <button type="button" onClick={() => doiCho(i, -1)} disabled={i === 0} className="text-phu hover:text-chinh disabled:opacity-30">
                     ↑ Lên
@@ -483,12 +630,31 @@ export default function XuongPhim({ coAi }: { coAi: boolean }) {
               </div>
               <div className="mt-2 grid gap-3 sm:grid-cols-[1fr_12rem]">
                 <div className="grid gap-2">
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <label className="grid gap-1 text-xs font-medium">
+                      Bối cảnh
+                      <input value={c.boiCanh ?? ''} list="ds-boi-canh" maxLength={80} onChange={(e) => suaCanh(c.id, { boiCanh: e.target.value })} className={`${O} font-normal`} />
+                    </label>
+                    <label className="grid gap-1 text-xs font-medium">
+                      Nhân vật có mặt (cách nhau dấu phẩy)
+                      <input
+                        value={(c.nhanVat ?? []).join(', ')}
+                        maxLength={160}
+                        onChange={(e) => suaCanh(c.id, { nhanVat: e.target.value.split(',').map((x) => x.trim()).filter(Boolean) })}
+                        className={`${O} font-normal`}
+                      />
+                    </label>
+                  </div>
                   <label className="grid gap-1 text-xs font-medium">
-                    Lời đọc
+                    Hành động
+                    <textarea value={c.hanhDong ?? ''} rows={2} maxLength={500} onChange={(e) => suaCanh(c.id, { hanhDong: e.target.value })} className={`${O} font-normal`} />
+                  </label>
+                  <label className="grid gap-1 text-xs font-medium">
+                    Lời thoại
                     <textarea value={c.loi} rows={2} maxLength={600} onChange={(e) => suaCanh(c.id, { loi: e.target.value })} className={`${O} font-normal`} />
                   </label>
                   <label className="grid gap-1 text-xs font-medium">
-                    Hình cần vẽ (gọi nhân vật bằng đúng tên ở mục 2)
+                    Khung hình đầu (để vẽ ảnh tĩnh)
                     <textarea value={c.hinh} rows={2} maxLength={600} onChange={(e) => suaCanh(c.id, { hinh: e.target.value })} className={`${O} font-normal`} />
                   </label>
                 </div>
@@ -499,7 +665,7 @@ export default function XuongPhim({ coAi }: { coAi: boolean }) {
                     <div className="flex aspect-video w-full items-center justify-center rounded-md border border-dashed border-slate-300 text-xs text-phu">Chưa có ảnh</div>
                   )}
                   <div className="flex flex-wrap items-center gap-2">
-                    <NutChep chu={cauLenhCanh(phim, c)} nhan="Chép câu lệnh vẽ" />
+                    <NutChep chu={cauLenhCanh(phim, c)} nhan="Chép câu lệnh ảnh đầu" />
                     <label className="cursor-pointer rounded-md border border-slate-300 bg-white px-2 py-1 text-xs font-semibold hover:border-chinh hover:text-chinh">
                       {anh[c.id] ? 'Đổi ảnh' : 'Chọn ảnh'}
                       <input
@@ -518,51 +684,112 @@ export default function XuongPhim({ coAi }: { coAi: boolean }) {
             </li>
           ))}
         </ul>
+        <datalist id="ds-boi-canh">
+          {tenBoiCanh.map((t) => (
+            <option key={t} value={t} />
+          ))}
+        </datalist>
         <button type="button" onClick={() => sua({ canh: [...phim.canh, { id: ma(), loi: '', hinh: '' }] })} className="mt-3 text-sm font-semibold text-chinh hover:underline">
           + Thêm cảnh
         </button>
       </section>
 
-      {/* 4. Dựng phim */}
+      {/* 4. Bối cảnh */}
       <section className={KHUNG}>
-        <h2 className="text-lg font-bold">4. Dựng phim</h2>
-        <p className="mt-1 text-sm text-phu">
-          Dài khoảng {Math.floor(uocGiay / 60)} phút {uocGiay % 60} giây · đã có {soAnh}/{coLoi.length} ảnh · lần dựng này tốn {luotMoi} lượt giọng Gemini
-          {luotMoi === 0 && coLoi.length > 0 ? ' (giọng đã đọc sẵn)' : ''}.
-        </p>
-        <div className="mt-3 flex flex-wrap items-center gap-3">
-          <select value={giong} onChange={(e) => setGiong(e.target.value)} disabled={ban} className="rounded-md border border-slate-300 px-2 py-1.5 text-sm">
-            {GIONG.filter(([m]) => m !== 'may').map(([m, ten]) => (
-              <option key={m} value={m}>
-                {m} — {ten}
-              </option>
-            ))}
-          </select>
-          <label className="flex items-center gap-1.5 text-sm">
-            <input type="checkbox" checked={phuDe} onChange={(e) => setPhuDe(e.target.checked)} disabled={ban} />
-            Phụ đề
-          </label>
-          <button type="button" onClick={dung} disabled={ban} className="rounded-lg bg-slate-900 px-4 py-1.5 text-sm font-semibold text-white hover:bg-slate-700 disabled:opacity-50">
-            {buoc ? 'Đang dựng…' : video ? 'Dựng lại' : 'Dựng phim'}
-          </button>
+        <div className="flex flex-wrap items-center gap-3">
+          <h2 className="text-lg font-bold">4. Bối cảnh ({phim.boiCanh.length})</h2>
+          <NutAgent ma="bc" dang={dangAgent} tat={tatAi} chay={() => chayAgent(['bc'])} nhan="Agent bối cảnh" />
         </div>
-        <p className="mt-2 text-xs text-phu">Phim được quay theo thời gian thật: phim dài bao nhiêu thì chờ bấy nhiêu. Sửa lời đọc hoặc đổi giọng thì đoạn đó phải đọc lại (tốn lượt); đổi ảnh hay phụ đề thì không.</p>
-        {buoc && <p className="mt-2 animate-pulse text-sm text-chinh">{buoc}</p>}
-        {loi && <p className="mt-2 text-sm text-red-600">{loi}</p>}
-        {video && (
-          <div className="mt-3 grid gap-3">
-            <video src={video.url} controls className="w-full max-w-2xl rounded-lg bg-black" />
-            <div className="flex flex-wrap items-center gap-3">
-              <a href={video.url} download={`${tenTep}.${video.duoi}`} className="rounded-lg bg-chinh px-3 py-1.5 text-sm font-semibold text-white hover:bg-chinh-dam">
-                Tải video về
-              </a>
-              {phim.ten.trim() && <NutChep chu={phim.ten.trim()} nhan="Chép tên làm tiêu đề YouTube" />}
-              <a href="https://studio.youtube.com" target="_blank" rel="noreferrer" className="text-sm font-semibold text-chinh hover:underline">
-                Mở YouTube Studio →
-              </a>
-            </div>
+        <p className="mt-1 text-xs text-phu">Vẽ mỗi nơi chốn một lần thành ảnh nền trống, lưu lại, rồi đính kèm vào mọi cảnh ở nơi đó để bối cảnh không bị đổi.</p>
+        {!phim.boiCanh.length && <p className="mt-3 text-sm text-phu">Chưa có bối cảnh. Chạy agent kịch bản rồi bấm Agent bối cảnh.</p>}
+        <ul className="mt-3 space-y-2">
+          {phim.boiCanh.map((b, i) => (
+            <li key={i} className="grid gap-2 rounded-lg bg-nen p-2 sm:grid-cols-[12rem_1fr]">
+              <input value={b.ten} maxLength={80} onChange={(e) => suaBoiCanh(i, { ten: e.target.value })} className={O} />
+              <textarea value={b.moTa} rows={2} maxLength={600} onChange={(e) => suaBoiCanh(i, { moTa: e.target.value })} className={O} />
+              <span className="flex items-center gap-2 sm:col-span-2">
+                <NutChep chu={cauLenhBoiCanh(phim, b)} nhan="Chép câu lệnh vẽ bối cảnh" chinh />
+                <button type="button" onClick={() => sua({ boiCanh: phim.boiCanh.filter((_, j) => j !== i) })} className="text-xs text-red-600 hover:underline">
+                  Xóa
+                </button>
+              </span>
+            </li>
+          ))}
+        </ul>
+        <button type="button" onClick={() => sua({ boiCanh: [...phim.boiCanh, { ten: '', moTa: '' }] })} className="mt-2 text-sm font-semibold text-chinh hover:underline">
+          + Thêm bối cảnh
+        </button>
+      </section>
+
+      {/* 5. Câu lệnh video */}
+      <section className={KHUNG}>
+        <div className="flex flex-wrap items-center gap-3">
+          <h2 className="text-lg font-bold">5. Câu lệnh video {phim.giay} giây</h2>
+          <NutAgent ma="vd" dang={dangAgent} tat={tatAi} chay={() => chayAgent(['vd'])} nhan="Agent câu lệnh video" />
+        </div>
+        <ol className="mt-2 list-decimal space-y-0.5 pl-5 text-xs text-phu">
+          <li>Mở Gemini, chọn tạo video.</li>
+          <li>Đính kèm ảnh khung đầu của cảnh (và tờ mẫu nhân vật, ảnh bối cảnh nếu Gemini cho đính kèm nhiều ảnh).</li>
+          <li>Bấm Chép câu lệnh video của cảnh đó, dán vào, tạo video. Chưa ưng thì tạo lại 2-3 lần rồi chọn bản tốt nhất.</li>
+          <li>Tải các đoạn về và nối theo thứ tự cảnh trong CapCut.</li>
+        </ol>
+        <ul className="mt-3 space-y-2">
+          {phim.canh.map((c, i) => (
+            <li key={c.id} className="rounded-lg border border-slate-200 p-3">
+              <div className="flex flex-wrap items-center gap-2 text-sm">
+                <span className="font-bold">Cảnh {i + 1}</span>
+                <span className={`rounded px-1.5 text-xs ${c.video ? 'bg-green-100 text-green-700' : 'bg-amber-50 text-amber-700'}`}>{c.video ? 'Agent đã viết diễn biến' : 'Chưa có diễn biến chi tiết'}</span>
+                <span className="ml-auto">
+                  <NutChep chu={cauLenhVideo(phim, c)} nhan={`Chép câu lệnh video ${phim.giay}s`} chinh />
+                </span>
+              </div>
+              <details className="mt-2">
+                <summary className="cursor-pointer text-xs font-semibold text-chinh">Xem câu lệnh</summary>
+                <pre className="mt-2 max-h-72 overflow-auto whitespace-pre-wrap rounded-md bg-nen p-2 text-xs">{cauLenhVideo(phim, c)}</pre>
+              </details>
+            </li>
+          ))}
+        </ul>
+      </section>
+
+      {/* 6. Dựng nhanh bằng ảnh tĩnh */}
+      <section className={KHUNG}>
+        <details>
+          <summary className="cursor-pointer text-lg font-bold">6. Dựng nhanh bằng ảnh tĩnh (không cần làm video)</summary>
+          <p className="mt-2 text-sm text-phu">
+            Ghép ảnh khung đầu của các cảnh với giọng AI đọc lời thoại và phụ đề thành video 16:9. Dài khoảng {Math.floor(uocGiay / 60)} phút {uocGiay % 60} giây · đã có {soAnh}/{coLoi.length} ảnh · lần dựng này tốn {luotMoi} lượt giọng Gemini.
+          </p>
+          <div className="mt-3 flex flex-wrap items-center gap-3">
+            <select value={giong} onChange={(e) => setGiong(e.target.value)} disabled={ban} className="rounded-md border border-slate-300 px-2 py-1.5 text-sm">
+              {GIONG.filter(([m]) => m !== 'may').map(([m, ten]) => (
+                <option key={m} value={m}>
+                  {m} — {ten}
+                </option>
+              ))}
+            </select>
+            <label className="flex items-center gap-1.5 text-sm">
+              <input type="checkbox" checked={phuDe} onChange={(e) => setPhuDe(e.target.checked)} disabled={ban} />
+              Phụ đề
+            </label>
+            <button type="button" onClick={dung} disabled={ban} className="rounded-lg bg-slate-900 px-4 py-1.5 text-sm font-semibold text-white hover:bg-slate-700 disabled:opacity-50">
+              {buoc ? 'Đang dựng…' : video ? 'Dựng lại' : 'Dựng phim'}
+            </button>
           </div>
-        )}
+          <p className="mt-2 text-xs text-phu">Phim được quay theo thời gian thật: phim dài bao nhiêu thì chờ bấy nhiêu. Giữ nguyên tab trong lúc dựng.</p>
+          {buoc && <p className="mt-2 animate-pulse text-sm text-chinh">{buoc}</p>}
+          {loi && <p className="mt-2 text-sm text-red-600">{loi}</p>}
+          {video && (
+            <div className="mt-3 grid gap-3">
+              <video src={video.url} controls className="w-full max-w-2xl rounded-lg bg-black" />
+              <div className="flex flex-wrap items-center gap-3">
+                <a href={video.url} download={`${tenTep}.${video.duoi}`} className="rounded-lg bg-chinh px-3 py-1.5 text-sm font-semibold text-white hover:bg-chinh-dam">
+                  Tải video về
+                </a>
+                {phim.ten.trim() && <NutChep chu={phim.ten.trim()} nhan="Chép tên làm tiêu đề YouTube" />}
+              </div>
+            </div>
+          )}
+        </details>
       </section>
     </div>
   )
