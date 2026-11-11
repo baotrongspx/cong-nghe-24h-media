@@ -131,6 +131,144 @@ export async function agentKichBan(yChinh: string, soCanh: number, giay: number,
   return { ok: true, ten: cat(r.kq.ten, 100), canh }
 }
 
+// ---------------- Agent đạo diễn & khán giả YouTube: chấm và sửa kịch bản ----------------
+export type DanhGia = {
+  tongThe: string
+  diemManh: string[]
+  diemYeu: string[]
+  moDau: string
+  giuChan: string
+  daoDien: string
+  catBo: string[]
+  suaTungCanh: { so: number; vanDe: string; cachSua: string }[]
+  tieuDe: string[]
+  thumbnail: string[]
+  cauMoDau: string
+  tiemNang: string
+  keHoach: string[]
+  videoTiep: string[]
+}
+
+const HE_DD = (giay: number, soTu: number) => `Bạn đồng thời đóng HAI vai:
+1) ĐẠO DIỄN PHIM CHUYÊN NGHIỆP: xây câu chuyện hấp dẫn, thiết kế bố cục, góc máy, chuyển động máy, diễn xuất, nhịp độ, âm thanh; tạo cao trào, bất ngờ, xung đột; hình phải khớp lời; cắt cảnh thừa và hành động vô nghĩa.
+2) KHÁN GIẢ YOUTUBE KHÓ TÍNH, có quyền rời đi bất cứ lúc nào: tôi có lý do gì để bấm vào? 5-15 giây đầu có giữ tôi lại không? Có đoạn nào nhàm chán khiến tôi thoát không? Hình có cuốn hút trên điện thoại không? Có điều gì khiến tôi muốn chia sẻ không?
+
+Mục tiêu: tăng tỉ lệ bấm xem, giữ chân từ giây đầu, tăng thời lượng xem, tạo cảm xúc để xem đến cuối và muốn xem video tiếp theo. Hình đẹp không đồng nghĩa với sức hút.
+
+Nhiệm vụ: đánh giá kịch bản được gửi theo đủ các mục, rồi VIẾT LẠI kịch bản đã sửa (canh_moi).
+Nguyên tắc: không khen xã giao, không nói chung chung; mỗi lỗi phải chỉ rõ cảnh nào và cách sửa cụ thể, giải thích vì sao người xem sẽ thấy hay hơn. Phân biệt dữ kiện với nhận định và giả thuyết. Không giật tít sai sự thật, không kéo dài cho đủ thời lượng, không hứa chắc viral hay được đề xuất.
+
+Ràng buộc khi viết lại canh_moi (thể loại hài đời thường 2D chibi, giữ nguyên thể loại):
+- Mỗi cảnh là một đoạn video ${giay} giây liền mạch. Câu mở đầu phải gây tò mò ngay trong 5 giây đầu; xung đột đưa vào sớm; mỗi cảnh phải đẩy chuyện đi tiếp hoặc gây cười; có cú lật và câu chốt.
+- Chỉ dùng nhân vật trong danh sách; bo_canh dùng lại tên cũ, tổng 2-4 bối cảnh; thay đổi cỡ cảnh (toàn, trung, cận, đặc tả) giữa các cảnh.
+- loi: mỗi câu một dòng "Tên: câu nói", tổng tối đa ${soTu} từ một cảnh. hanh_dong: 1-2 hành động nhìn thấy được. hinh: khung hình đầu, gọi nhân vật bằng tên, không tả lại ngoại hình.
+- Số cảnh có thể bớt nếu cắt cảnh thừa, không thêm quá 2 cảnh.
+Không dùng người thật, nhãn hiệu thật. Viết tiếng Việt có dấu đầy đủ.`
+
+export async function agentDaoDien(
+  giay: number,
+  ten: string,
+  canh: { boiCanh: string; nhanVat: string[]; hanhDong: string; loi: string; hinh: string }[],
+  nhanVat: NhanVatAi[],
+): Promise<KetQua<{ danhGia: DanhGia; canh: CanhAi[] }>> {
+  const g = giay === 10 ? 10 : 8
+  if (!canh.some((c) => c.loi.trim() || c.hanhDong.trim())) return { ok: false, thongBao: 'Chưa có kịch bản, hãy chạy agent kịch bản trước' }
+  const ds = canh
+    .slice(0, 20)
+    .map((c, i) => `Cảnh ${i + 1} | bối cảnh: ${cat(c.boiCanh, 80) || '?'} | nhân vật: ${c.nhanVat.join(', ') || '?'}\n  Hành động: ${cat(c.hanhDong, 400)}\n  Lời thoại: ${cat(c.loi, 400) || '(không có)'}\n  Khung đầu: ${cat(c.hinh, 400)}`)
+    .join('\n')
+  const mang = { type: 'ARRAY', items: S({}) }
+  const r = await goiAgent<{
+    tong_the?: string
+    diem_manh?: string[]
+    diem_yeu?: string[]
+    mo_dau_30_giay?: string
+    giu_chan?: string
+    dao_dien?: string
+    cat_bo?: string[]
+    sua_tung_canh?: { so?: number; van_de?: string; cach_sua?: string }[]
+    tieu_de?: string[]
+    thumbnail?: string[]
+    cau_mo_dau?: string
+    tiem_nang?: string
+    ke_hoach?: string[]
+    video_tiep?: string[]
+    canh_moi?: { bo_canh?: string; nhan_vat?: string[]; hanh_dong?: string; loi?: string; hinh?: string }[]
+  }>(
+    HE_DD(g, g === 10 ? 24 : 18),
+    `Tên mẩu: ${cat(ten, 100) || '(chưa đặt)'}\n\nNhân vật:\n${nhanVat.filter((n) => n.ten.trim()).map((n) => `- ${n.ten}: ${n.tinhCach || n.moTa}`).join('\n')}\n\nKịch bản hiện tại:\n${ds}`,
+    {
+      type: 'OBJECT',
+      properties: {
+        tong_the: S({ description: '1. Đánh giá tổng thể, 2-3 câu' }),
+        diem_manh: { ...mang, description: '2. Điểm mạnh' },
+        diem_yeu: { ...mang, description: '2. Điểm yếu' },
+        mo_dau_30_giay: S({ description: '3. Phân tích sức hút 30 giây đầu' }),
+        giu_chan: S({ description: '4. Khả năng giữ chân, chỉ rõ cảnh có nguy cơ khiến người xem rời đi' }),
+        dao_dien: S({ description: '5. Hình ảnh, góc máy, diễn xuất, âm thanh' }),
+        cat_bo: { ...mang, description: '6. Phân đoạn cần cắt hoặc làm lại, ghi số cảnh' },
+        sua_tung_canh: {
+          type: 'ARRAY',
+          description: '7. Sửa cụ thể theo từng cảnh của kịch bản CŨ',
+          items: { type: 'OBJECT', properties: { so: { type: 'INTEGER' }, van_de: S({}), cach_sua: S({}) }, required: ['so', 'van_de', 'cach_sua'] },
+        },
+        tieu_de: { ...mang, description: '8. Đúng 3 tiêu đề YouTube gây tò mò nhưng không sai sự thật' },
+        thumbnail: { ...mang, description: '8. 2-3 ý tưởng ảnh thu nhỏ' },
+        cau_mo_dau: S({ description: 'Câu mở đầu mạnh nhất' }),
+        tiem_nang: S({ description: '9. Tiềm năng tiếp cận khán giả, ghi rõ đây là nhận định' }),
+        ke_hoach: { ...mang, description: '10. Kế hoạch nâng cấp trước khi xuất bản, gồm cả lời kêu gọi hành động tự nhiên' },
+        video_tiep: { ...mang, description: 'Ý tưởng video tiếp theo cho chuỗi nội dung' },
+        canh_moi: {
+          type: 'ARRAY',
+          items: {
+            type: 'OBJECT',
+            properties: { bo_canh: S({}), nhan_vat: mang, hanh_dong: S({}), loi: S({}), hinh: S({}) },
+            required: ['bo_canh', 'nhan_vat', 'hanh_dong', 'loi', 'hinh'],
+          },
+        },
+      },
+      required: ['tong_the', 'diem_manh', 'diem_yeu', 'mo_dau_30_giay', 'giu_chan', 'dao_dien', 'cat_bo', 'sua_tung_canh', 'tieu_de', 'thumbnail', 'cau_mo_dau', 'tiem_nang', 'ke_hoach', 'video_tiep', 'canh_moi'],
+    },
+    0.7,
+  )
+  if (!r.ok) return r
+  const k = r.kq
+  const ds2 = (x?: string[], n = 8) => (x ?? []).map((s) => cat(s, 400)).filter(Boolean).slice(0, n)
+  const canhMoi = (k.canh_moi ?? [])
+    .map((c) => ({
+      boiCanh: cat(c.bo_canh, 80),
+      nhanVat: (c.nhan_vat ?? []).map((x) => cat(x, 40)).filter(Boolean).slice(0, 4),
+      hanhDong: cat(c.hanh_dong, 500),
+      loi: cat(c.loi, 500),
+      hinh: cat(c.hinh, 600),
+    }))
+    .filter((c) => c.hanhDong || c.loi)
+    .slice(0, 22)
+  return {
+    ok: true,
+    danhGia: {
+      tongThe: cat(k.tong_the, 800),
+      diemManh: ds2(k.diem_manh),
+      diemYeu: ds2(k.diem_yeu),
+      moDau: cat(k.mo_dau_30_giay, 800),
+      giuChan: cat(k.giu_chan, 800),
+      daoDien: cat(k.dao_dien, 800),
+      catBo: ds2(k.cat_bo),
+      suaTungCanh: (k.sua_tung_canh ?? [])
+        .map((x) => ({ so: Math.round(Number(x.so)) || 0, vanDe: cat(x.van_de, 300), cachSua: cat(x.cach_sua, 400) }))
+        .filter((x) => x.vanDe || x.cachSua)
+        .slice(0, 20),
+      tieuDe: ds2(k.tieu_de, 3),
+      thumbnail: ds2(k.thumbnail, 3),
+      cauMoDau: cat(k.cau_mo_dau, 300),
+      tiemNang: cat(k.tiem_nang, 600),
+      keHoach: ds2(k.ke_hoach),
+      videoTiep: ds2(k.video_tiep, 5),
+    },
+    canh: canhMoi,
+  }
+}
+
 // ---------------- Agent 3: bối cảnh ----------------
 const HE_BC = `Bạn là AGENT THIẾT KẾ BỐI CẢNH cho phim hoạt hình 2D chibi đời thường Việt Nam.
 Với MỖI bối cảnh trong danh sách (giữ đúng tên), viết mo_ta CỐ ĐỊNH, cụ thể để AI vẽ lại y hệt ở mọi cảnh: loại nơi chốn, ban ngày hay ban đêm, bố cục trái - giữa - phải, 3-5 đồ vật chính với màu cụ thể, màu tường / sàn / trời, ánh sáng. 2-3 câu.

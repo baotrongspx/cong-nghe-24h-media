@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { KIEU, giaiMa, tachPhuDe, veChu } from '@/lib/dungVideo'
 import { GIONG } from '@/lib/giongDoc'
-import { agentBoiCanh, agentKichBan, agentNhanVat, agentVideo, docDoanPhim, type VideoAi } from './actions'
+import { agentBoiCanh, agentDaoDien, agentKichBan, agentNhanVat, agentVideo, docDoanPhim, type DanhGia, type VideoAi } from './actions'
 
 // Xưởng phim hoạt hình kể chuyện, có đội 4 agent:
 // 1) nhân vật (câu lệnh tờ mẫu cho Gemini)  2) kịch bản  3) bối cảnh (câu lệnh vẽ nền trống)  4) câu lệnh video 8/10 giây cho Gemini (Veo).
@@ -11,7 +11,7 @@ import { agentBoiCanh, agentKichBan, agentNhanVat, agentVideo, docDoanPhim, type
 type NhanVat = { ten: string; moTa: string; tinhCach?: string; giong?: string }
 type BoiCanh = { ten: string; moTa: string }
 type Canh = { id: string; loi: string; hinh: string; boiCanh?: string; nhanVat?: string[]; hanhDong?: string; video?: VideoAi | null }
-type Phim = { ten: string; yChinh: string; phongCach: string; giay: 8 | 10; nhanVat: NhanVat[]; boiCanh: BoiCanh[]; canh: Canh[] }
+type Phim = { ten: string; yChinh: string; phongCach: string; giay: 8 | 10; nhanVat: NhanVat[]; boiCanh: BoiCanh[]; canh: Canh[]; danhGia?: DanhGia | null; banSua?: Canh[] | null }
 
 const K = { rong: 1280, cao: 720, coChu: 40, viTriChu: 0.86 }
 const CHUYEN = 0.25 // giây chuyển mờ giữa hai cảnh
@@ -221,14 +221,89 @@ function NutChep({ chu, nhan = 'Chép', chinh = false }: { chu: string; nhan?: s
 const O = 'w-full rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm'
 const KHUNG = 'mt-6 rounded-xl border border-slate-200 bg-white p-4'
 
-type MaAgent = 'nv' | 'kb' | 'bc' | 'vd'
-const TEN_AGENT: Record<MaAgent, string> = { nv: 'Agent nhân vật', kb: 'Agent kịch bản', bc: 'Agent bối cảnh', vd: 'Agent câu lệnh video' }
+type MaAgent = 'nv' | 'kb' | 'dd' | 'bc' | 'vd'
+const TEN_AGENT: Record<MaAgent, string> = { nv: 'Agent nhân vật', kb: 'Agent kịch bản', dd: 'Agent đạo diễn & khán giả YouTube', bc: 'Agent bối cảnh', vd: 'Agent câu lệnh video' }
+const CA_DOI: MaAgent[] = ['nv', 'kb', 'dd', 'bc', 'vd']
+const moi = (ds: Omit<Canh, 'id'>[]): Canh[] => ds.map((c) => ({ id: ma(), ...c, video: null }))
 
 function NutAgent({ ma, dang, tat, chay, nhan }: { ma: MaAgent; dang: MaAgent | null; tat: boolean; chay: () => void; nhan: string }) {
   return (
     <button type="button" onClick={chay} disabled={tat} className="rounded-lg bg-chinh px-3 py-1.5 text-sm font-semibold text-white hover:bg-chinh-dam disabled:opacity-50">
       {dang === ma ? `${TEN_AGENT[ma]} đang làm…` : nhan}
     </button>
+  )
+}
+
+function Muc({ so, ten, children }: { so: number; ten: string; children: React.ReactNode }) {
+  return (
+    <div className="border-t border-slate-100 pt-3">
+      <p className="text-sm font-bold">
+        {so}. {ten}
+      </p>
+      <div className="mt-1 text-sm text-slate-700">{children}</div>
+    </div>
+  )
+}
+
+const Ds = ({ ds }: { ds: string[] }) => (ds.length ? <ul className="list-disc space-y-0.5 pl-5">{ds.map((x, i) => <li key={i}>{x}</li>)}</ul> : <p className="text-phu">Không có.</p>)
+
+function BaoCao({ d }: { d: DanhGia }) {
+  return (
+    <div className="mt-3 grid gap-3">
+      <Muc so={1} ten="Đánh giá tổng thể">{d.tongThe}</Muc>
+      <Muc so={2} ten="Điểm mạnh và điểm yếu">
+        <p className="font-semibold text-green-700">Điểm mạnh</p>
+        <Ds ds={d.diemManh} />
+        <p className="mt-2 font-semibold text-red-700">Điểm yếu</p>
+        <Ds ds={d.diemYeu} />
+      </Muc>
+      <Muc so={3} ten="Sức hút 30 giây đầu">{d.moDau}</Muc>
+      <Muc so={4} ten="Khả năng giữ chân người xem">{d.giuChan}</Muc>
+      <Muc so={5} ten="Đạo diễn: hình ảnh, góc máy, diễn xuất, âm thanh">{d.daoDien}</Muc>
+      <Muc so={6} ten="Phân đoạn cần cắt hoặc làm lại">
+        <Ds ds={d.catBo} />
+      </Muc>
+      <Muc so={7} ten="Sửa cụ thể theo từng cảnh (kịch bản cũ)">
+        {d.suaTungCanh.length ? (
+          <ul className="space-y-1">
+            {d.suaTungCanh.map((x, i) => (
+              <li key={i}>
+                <b>Cảnh {x.so}:</b> {x.vanDe} <span className="text-chinh">→ {x.cachSua}</span>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="text-phu">Không có.</p>
+        )}
+      </Muc>
+      <Muc so={8} ten="Tiêu đề và ảnh thu nhỏ">
+        <ul className="space-y-1">
+          {d.tieuDe.map((t, i) => (
+            <li key={i} className="flex items-start gap-2">
+              <span className="flex-1">{t}</span>
+              <NutChep chu={t} />
+            </li>
+          ))}
+        </ul>
+        <p className="mt-2 font-semibold">Ý tưởng ảnh thu nhỏ</p>
+        <Ds ds={d.thumbnail} />
+        {d.cauMoDau && (
+          <p className="mt-2">
+            <b>Câu mở đầu mạnh nhất:</b> {d.cauMoDau}
+          </p>
+        )}
+      </Muc>
+      <Muc so={9} ten="Tiềm năng tiếp cận khán giả (nhận định của AI)">{d.tiemNang}</Muc>
+      <Muc so={10} ten="Kế hoạch nâng cấp trước khi đăng">
+        <Ds ds={d.keHoach} />
+        {d.videoTiep.length > 0 && (
+          <>
+            <p className="mt-2 font-semibold">Ý tưởng video tiếp theo</p>
+            <Ds ds={d.videoTiep} />
+          </>
+        )}
+      </Muc>
+    </div>
   )
 }
 
@@ -331,7 +406,17 @@ export default function XuongPhim({ coAi }: { coAi: boolean }) {
       const r = await agentKichBan(p.yChinh, soCanh, p.giay, p.nhanVat.map((n) => ({ ten: n.ten, moTa: n.moTa, tinhCach: n.tinhCach ?? '', giong: n.giong ?? '' })))
       if (!r.ok) throw new Error(r.thongBao)
       boAnh(p.canh.map((c) => c.id))
-      return { ...p, ten: r.ten || p.ten, canh: r.canh.map((c) => ({ id: ma(), ...c, video: null })) }
+      return { ...p, ten: r.ten || p.ten, canh: moi(r.canh), danhGia: null, banSua: null }
+    }
+    if (maAgent === 'dd') {
+      const r = await agentDaoDien(
+        p.giay,
+        p.ten,
+        p.canh.map((c) => ({ boiCanh: c.boiCanh ?? '', nhanVat: c.nhanVat ?? nhanVatTrongCanh(p, c).map((n) => n.ten), hanhDong: c.hanhDong ?? '', loi: c.loi, hinh: c.hinh })),
+        p.nhanVat.map((n) => ({ ten: n.ten, moTa: n.moTa, tinhCach: n.tinhCach ?? '', giong: n.giong ?? '' })),
+      )
+      if (!r.ok) throw new Error(r.thongBao)
+      return { ...p, danhGia: r.danhGia, banSua: r.canh.length ? moi(r.canh) : null }
     }
     if (maAgent === 'bc') {
       const ten = p.canh.map((c) => c.boiCanh ?? '').filter(Boolean)
@@ -355,6 +440,8 @@ export default function XuongPhim({ coAi }: { coAi: boolean }) {
     try {
       for (const m of ds) {
         p = await lamAgent(m, p)
+        // Chạy cả đội: kịch bản đã sửa của agent đạo diễn được dùng luôn cho các agent sau
+        if (m === 'dd' && ds.length > 1 && p.banSua?.length) p = apDung(p)
         setPhim(p)
         xong++
       }
@@ -368,11 +455,23 @@ export default function XuongPhim({ coAi }: { coAi: boolean }) {
     }
   }
 
+  function apDung(p: Phim): Phim {
+    if (!p.banSua?.length) return p
+    boAnh(p.canh.map((c) => c.id))
+    return { ...p, canh: p.banSua, banSua: null }
+  }
+
+  function apDungBanSua() {
+    if (phim.canh.some((c) => anh[c.id]) && !confirm('Dùng kịch bản đã sửa thay cho kịch bản hiện tại? Ảnh đã tải lên các cảnh cũ sẽ bị bỏ.')) return
+    setVideo(null)
+    setPhim((x) => apDung(x))
+  }
+
   function mauMoi() {
     if (!confirm('Xóa bảng cảnh, bối cảnh và ảnh đang có để làm mẩu chuyện mới? (Nhân vật và phong cách được giữ lại)')) return
     boAnh(phim.canh.map((c) => c.id))
     setVideo(null)
-    setPhim((x) => ({ ...x, ten: '', yChinh: '', boiCanh: [], canh: [{ id: ma(), loi: '', hinh: '' }] }))
+    setPhim((x) => ({ ...x, ten: '', yChinh: '', boiCanh: [], danhGia: null, banSua: null, canh: [{ id: ma(), loi: '', hinh: '' }] }))
   }
 
   const coLoi = phim.canh.filter((c) => loiDeDoc(c.loi))
@@ -553,23 +652,24 @@ export default function XuongPhim({ coAi }: { coAi: boolean }) {
           <ol className="mt-1 list-decimal space-y-0.5 pl-5 text-xs text-phu">
             <li>Agent nhân vật: thiết kế nhân vật và viết câu lệnh vẽ tờ mẫu cho Gemini.</li>
             <li>Agent kịch bản: chia câu chuyện thành từng cảnh {phim.giay} giây, có lời thoại và hành động.</li>
+            <li>Agent đạo diễn & khán giả YouTube: chấm kịch bản theo 10 mục (mở đầu, giữ chân, cảnh thừa, tiêu đề, ảnh thu nhỏ…) và viết lại bản đã sửa.</li>
             <li>Agent bối cảnh: tả từng nơi chốn và viết câu lệnh vẽ ảnh nền trống cho Gemini.</li>
             <li>Agent câu lệnh video: viết câu lệnh {phim.giay} giây cho từng cảnh để dán vào Gemini làm video.</li>
           </ol>
           <div className="mt-3 flex flex-wrap items-center gap-2">
             <button
               type="button"
-              onClick={() => chayAgent(['nv', 'kb', 'bc', 'vd'])}
+              onClick={() => chayAgent(CA_DOI)}
               disabled={tatAi}
               className="rounded-lg bg-slate-900 px-4 py-1.5 text-sm font-semibold text-white hover:bg-slate-700 disabled:opacity-50"
             >
-              {dangAgent ? `${TEN_AGENT[dangAgent]} đang làm…` : 'Chạy cả đội (4 agent)'}
+              {dangAgent ? `${TEN_AGENT[dangAgent]} đang làm…` : 'Chạy cả đội (5 agent)'}
             </button>
             <button type="button" onClick={mauMoi} disabled={ban} className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-semibold hover:bg-white disabled:opacity-50">
               Làm mẩu mới
             </button>
           </div>
-          <p className="mt-2 text-xs text-phu">Cả đội tốn 4 lượt AI viết chữ, chạy khoảng 1-2 phút. Mỗi agent cũng có nút riêng ở mục của nó để làm lại phần đó.</p>
+          <p className="mt-2 text-xs text-phu">Cả đội tốn 5 lượt AI viết chữ, chạy khoảng 2-3 phút. Khi chạy cả đội, kịch bản đã sửa của agent đạo diễn được dùng luôn. Mỗi agent cũng có nút riêng ở mục của nó để làm lại phần đó.</p>
           {tinAgent && <p className={`mt-2 text-sm ${tinAgent.loai === 'ok' ? 'text-green-700' : 'text-red-600'}`}>{tinAgent.chu}</p>}
         </div>
         {!coAi && <p className="mt-2 text-xs text-amber-700">Trang chưa cài khóa Gemini nên các agent chưa chạy được. Bạn vẫn tự gõ các mục bên dưới được.</p>}
@@ -707,10 +807,31 @@ export default function XuongPhim({ coAi }: { coAi: boolean }) {
         </button>
       </section>
 
-      {/* 4. Bối cảnh */}
+      {/* 4. Đạo diễn & khán giả YouTube */}
       <section className={KHUNG}>
         <div className="flex flex-wrap items-center gap-3">
-          <h2 className="text-lg font-bold">4. Bối cảnh ({phim.boiCanh.length})</h2>
+          <h2 className="text-lg font-bold">4. Đạo diễn & khán giả YouTube</h2>
+          <NutAgent ma="dd" dang={dangAgent} tat={tatAi} chay={() => chayAgent(['dd'])} nhan="Agent đạo diễn chấm kịch bản" />
+        </div>
+        <p className="mt-1 text-xs text-phu">Chấm kịch bản như một đạo diễn và một người xem YouTube khó tính, chỉ ra cảnh yếu, rồi viết lại bản đã sửa để bạn chọn dùng hay không.</p>
+        {phim.banSua?.length ? (
+          <div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg bg-amber-50 p-3 text-sm">
+            <span className="font-semibold text-amber-900">Có kịch bản đã sửa ({phim.banSua.length} cảnh).</span>
+            <button type="button" onClick={apDungBanSua} disabled={ban} className="rounded-lg bg-chinh px-3 py-1.5 text-sm font-semibold text-white hover:bg-chinh-dam disabled:opacity-50">
+              Dùng kịch bản đã sửa
+            </button>
+            <button type="button" onClick={() => sua({ banSua: null })} disabled={ban} className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-semibold hover:bg-slate-50 disabled:opacity-50">
+              Giữ kịch bản cũ
+            </button>
+          </div>
+        ) : null}
+        {phim.danhGia ? <BaoCao d={phim.danhGia} /> : <p className="mt-3 text-sm text-phu">Chưa chấm. Viết xong kịch bản rồi bấm nút ở trên.</p>}
+      </section>
+
+      {/* 5. Bối cảnh */}
+      <section className={KHUNG}>
+        <div className="flex flex-wrap items-center gap-3">
+          <h2 className="text-lg font-bold">5. Bối cảnh ({phim.boiCanh.length})</h2>
           <NutAgent ma="bc" dang={dangAgent} tat={tatAi} chay={() => chayAgent(['bc'])} nhan="Agent bối cảnh" />
         </div>
         <p className="mt-1 text-xs text-phu">Vẽ mỗi nơi chốn một lần thành ảnh nền trống, lưu lại, rồi đính kèm vào mọi cảnh ở nơi đó để bối cảnh không bị đổi.</p>
@@ -737,7 +858,7 @@ export default function XuongPhim({ coAi }: { coAi: boolean }) {
       {/* 5. Câu lệnh video */}
       <section className={KHUNG}>
         <div className="flex flex-wrap items-center gap-3">
-          <h2 className="text-lg font-bold">5. Câu lệnh video {phim.giay} giây</h2>
+          <h2 className="text-lg font-bold">6. Câu lệnh video {phim.giay} giây</h2>
           <NutAgent ma="vd" dang={dangAgent} tat={tatAi} chay={() => chayAgent(['vd'])} nhan="Agent câu lệnh video" />
         </div>
         <ol className="mt-2 list-decimal space-y-0.5 pl-5 text-xs text-phu">
@@ -768,7 +889,7 @@ export default function XuongPhim({ coAi }: { coAi: boolean }) {
       {/* 6. Dựng nhanh bằng ảnh tĩnh */}
       <section className={KHUNG}>
         <details>
-          <summary className="cursor-pointer text-lg font-bold">6. Dựng nhanh bằng ảnh tĩnh (không cần làm video)</summary>
+          <summary className="cursor-pointer text-lg font-bold">7. Dựng nhanh bằng ảnh tĩnh (không cần làm video)</summary>
           <p className="mt-2 text-sm text-phu">
             Ghép ảnh khung đầu của các cảnh với giọng AI đọc lời thoại và phụ đề thành video 16:9. Dài khoảng {Math.floor(uocGiay / 60)} phút {uocGiay % 60} giây · đã có {soAnh}/{coLoi.length} ảnh · lần dựng này tốn {luotMoi} lượt giọng Gemini.
           </p>
