@@ -1,8 +1,21 @@
 'use server'
 
+import { revalidatePath } from 'next/cache'
 import { goiGeminiJson } from '@/lib/gemini'
 import { GIONG, docThanhGiong } from '@/lib/giongNoi'
-import { batBuocDangNhap } from '@/lib/phien'
+import { daMoKhoa, moKhoa } from '@/lib/khoa'
+
+const CHUA_MO = 'Trang đang khóa, hãy tải lại trang và nhập mật khẩu'
+
+// Nhập mật khẩu mở trang. Sai thì chờ một nhịp để không dò mật khẩu nhanh được.
+export async function nhapMatKhau(_truoc: string | null, form: FormData): Promise<string | null> {
+  if (!(await moKhoa(String(form.get('mat_khau') ?? '')))) {
+    await new Promise((xong) => setTimeout(xong, 1200))
+    return 'Mật khẩu chưa đúng'
+  }
+  revalidatePath('/lam-phim')
+  return null
+}
 
 // Bộ quy tắc thể loại: hoạt hình 2D chibi, hài kể chuyện đời thường. AI viết bảng cảnh phải theo đúng các điều này.
 const QUY_TAC = `Bạn là đạo diễn kiêm biên kịch phim hoạt hình 2D chibi, thể loại HÀI KỂ CHUYỆN ĐỜI THƯỜNG Việt Nam.
@@ -46,7 +59,7 @@ const SCHEMA = {
 export type BangCanh = { ok: true; ten: string; canh: { loi: string; hinh: string }[] } | { ok: false; thongBao: string }
 
 export async function vietBangCanh(yChinh: string, soCanh: number, nhanVat: { ten: string; moTa: string }[]): Promise<BangCanh> {
-  await batBuocDangNhap()
+  if (!(await daMoKhoa())) return { ok: false, thongBao: CHUA_MO }
   const y = yChinh.trim().slice(0, 3000)
   if (y.length < 20) return { ok: false, thongBao: 'Hãy kể ý chính câu chuyện dài hơn một chút (ít nhất vài câu)' }
   const so = Math.min(14, Math.max(4, Math.round(soCanh) || 10))
@@ -79,7 +92,7 @@ export async function vietBangCanh(yChinh: string, soCanh: number, nhanVat: { te
 
 // Đọc một đoạn lời (gồm vài cảnh liền nhau) thành giọng nói. Mỗi lần gọi tốn 1 lượt giọng Gemini.
 export async function docDoanPhim(chu: string, giong: string): Promise<{ ok: true; amThanh: string } | { ok: false; thongBao: string }> {
-  await batBuocDangNhap()
+  if (!(await daMoKhoa())) return { ok: false, thongBao: CHUA_MO }
   if (!GIONG.some(([ma]) => ma === giong) || giong === 'may') return { ok: false, thongBao: 'Giọng không hợp lệ' }
   const sach = chu.trim().slice(0, 1500)
   if (!sach) return { ok: false, thongBao: 'Chưa có lời để đọc' }

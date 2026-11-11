@@ -1,6 +1,6 @@
 import type { MetadataRoute } from 'next'
-import { diaChiWeb } from '@/lib/thongTin'
 
+// Trang công cụ riêng, không cho máy tìm kiếm ghi nhận
 export default function robots(): MetadataRoute.Robots {
-  return { rules: { userAgent: '*', allow: '/', disallow: ['/quan-ly', '/api/'] }, sitemap: `${diaChiWeb()}/sitemap.xml` }
+  return { rules: { userAgent: '*', disallow: '/' } }
 }
