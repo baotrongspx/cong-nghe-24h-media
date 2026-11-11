@@ -142,70 +142,6 @@ function cauLenhCanh(p: Phim, c: Canh) {
     .join('\n\n')
 }
 
-function cauLenhVideo(p: Phim, c: Canh, truoc?: Canh) {
-  const co = nhanVatTrongCanh(p, c)
-  const bc = timBoiCanh(p, c)
-  const g = p.giay
-  const noiTiep = !!truoc && (!!c.tuKhungCuoi || (!!c.boiCanh?.trim() && truoc.boiCanh?.trim().toLowerCase() === c.boiCanh.trim().toLowerCase()))
-  const dinhKem = [c.tuKhungCuoi ? 'ảnh khung cuối của video cảnh trước (làm khung đầu)' : 'ảnh khung đầu của cảnh này', ...co.map((n) => `tờ mẫu ${n.ten.trim()}`), ...(bc ? [`ảnh bối cảnh "${bc.ten.trim()}"`] : [])]
-  const dienBien = c.video?.dienBien?.length
-    ? c.video.dienBien.map((d) => `${d.tu}-${d.den} giây: ${d.viec}`).join('\n')
-    : `0-${g} giây: ${(c.hanhDong || c.hinh).trim()}`
-  const loi = c.loi
-    .split('\n')
-    .map((d) => d.trim())
-    .filter(Boolean)
-    .map((d) => {
-      const m = d.match(/^([^:]{1,30}):\s*(.+)$/)
-      return m ? `${m[1].trim()}: "${m[2].trim().replace(/^"|"$/g, '')}"` : `Người kể: "${d}"`
-    })
-  return [
-    `Tạo video hoạt hình dài ${g} giây, MỘT cảnh quay liền, không cắt cảnh.`,
-    `PHONG CÁCH: ${p.phongCach.trim()} Giữ đúng nét vẽ, nhân vật và bối cảnh như các ảnh tham chiếu.`,
-    `ẢNH ĐÍNH KÈM: ${dinhKem.join(', ')}. Khung hình đầu tiên phải giống ảnh khung đầu.`,
-    co.length ? `NHÂN VẬT (giữ y hệt tờ mẫu, không đổi mặt, tóc, quần áo):\n${co.map((n) => `- ${n.ten.trim()}: ${n.moTa.trim()}.${n.giong ? ` Giọng: ${n.giong.trim()}.` : ''}`).join('\n')}` : '',
-    bc ? `BỐI CẢNH (giữ y hệt ảnh bối cảnh): ${bc.ten.trim()} — ${bc.moTa.trim()}` : '',
-    c.viTri?.trim() ? `VỊ TRÍ TRÊN MÀN HÌNH (giữ đúng suốt cảnh, không đổi chỗ, không vượt trục): ${c.viTri.trim()}` : '',
-    noiTiep ? CAU_NOI_TIEP : '',
-    `DIỄN BIẾN:\n${dienBien}`,
-    c.video?.mayQuay ? `MÁY QUAY: ${c.video.mayQuay}` : 'MÁY QUAY: đứng yên, giữ nguyên khung hình.',
-    loi.length ? `LỜI THOẠI (tiếng Việt, nhép miệng đúng người đang nói):\n${loi.join('\n')}` : 'LỜI THOẠI: không có.',
-    c.video?.amThanh ? `ÂM THANH: ${c.video.amThanh}` : '',
-    'CẤM: chữ, phụ đề, tên nhân vật hay nhãn tên trên hình, logo, thêm nhân vật khác, đổi chỗ trái phải của nhân vật, đổi màu hay kiểu quần áo, đổi kính hay kiểu tóc, đổi màu tường hay đồ đạc, cắt cảnh, chuyển sang 3D hay người thật.',
-  ]
-    .filter(Boolean)
-    .join('\n\n')
-}
-
-const CAU_NOI_TIEP =
-  'NỐI TIẾP ĐOẠN TRƯỚC: ảnh đính kèm chính là khung hình cuối của video đoạn trước. Bắt đầu đúng từ ảnh đó: giữ nguyên vị trí trái phải của từng nhân vật, khuôn mặt, kiểu tóc, kính, màu và kiểu quần áo, màu tường, tranh, cửa sổ, đồ đạc, gạch sàn và ánh sáng như trong ảnh. Không viết chữ, không ghi tên nhân vật lên hình.'
-
-// Cắt khung hình cuối của một video thành ảnh PNG
-async function catKhungCuoi(tep: File): Promise<Blob> {
-  const url = URL.createObjectURL(tep)
-  try {
-    const v = document.createElement('video')
-    v.muted = true
-    v.preload = 'auto'
-    v.src = url
-    await new Promise<void>((ok, loi) => {
-      v.onloadeddata = () => ok()
-      v.onerror = () => loi(new Error('Không đọc được video này, hãy dùng tệp MP4'))
-    })
-    v.currentTime = Math.max(0, v.duration - 0.06)
-    await new Promise<void>((ok) => (v.onseeked = () => ok()))
-    const c = document.createElement('canvas')
-    c.width = v.videoWidth
-    c.height = v.videoHeight
-    c.getContext('2d')!.drawImage(v, 0, 0)
-    const blob = await new Promise<Blob | null>((ok) => c.toBlob(ok, 'image/png'))
-    if (!blob) throw new Error('Không lấy được khung hình')
-    return blob
-  } finally {
-    URL.revokeObjectURL(url)
-  }
-}
-
 function taiVe(blob: Blob, ten: string) {
   const a = document.createElement('a')
   a.href = URL.createObjectURL(blob)
@@ -270,53 +206,6 @@ function OLamPhimMay({ phim, tat }: { phim: Phim; tat: boolean }) {
   )
 }
 
-function OCatKhung() {
-  const [anh, setAnh] = useState<{ url: string; ten: string; blob: Blob } | null>(null)
-  const [loi, setLoi] = useState('')
-  useEffect(() => () => void (anh && URL.revokeObjectURL(anh.url)), [anh])
-  return (
-    <div className="mt-3 rounded-lg border border-chinh/30 bg-chinh/5 p-3">
-      <p className="text-sm font-semibold">Cắt khung cuối của video</p>
-      <p className="mt-1 text-xs text-phu">Tải video vừa làm lên, trang cắt hình cuối cùng để bạn tải về và đính kèm khi làm đoạn tiếp theo. Chép thêm câu nối tiếp dán vào câu lệnh của đoạn đó.</p>
-      <div className="mt-2 flex flex-wrap items-center gap-2">
-        <label className="cursor-pointer rounded-lg bg-chinh px-3 py-1.5 text-sm font-semibold text-white hover:bg-chinh-dam">
-          Chọn video
-          <input
-            type="file"
-            accept="video/*"
-            className="hidden"
-            onChange={async (e) => {
-              const tep = e.target.files?.[0]
-              e.target.value = ''
-              if (!tep) return
-              setLoi('')
-              try {
-                const blob = await catKhungCuoi(tep)
-                const ten = `khung-cuoi-${tep.name.replace(/\.[^.]+$/, '')}.png`
-                setAnh({ url: URL.createObjectURL(blob), ten, blob })
-                taiVe(blob, ten)
-              } catch (er) {
-                setLoi(er instanceof Error ? er.message : 'Không cắt được khung cuối')
-              }
-            }}
-          />
-        </label>
-        <NutChep chu={CAU_NOI_TIEP} nhan="Chép câu nối tiếp" />
-      </div>
-      {loi && <p className="mt-2 text-sm text-red-600">{loi}</p>}
-      {anh && (
-        <div className="mt-2 flex flex-wrap items-end gap-3">
-          <img src={anh.url} alt="Khung cuối" className="w-64 rounded-md bg-slate-900" />
-          <button type="button" onClick={() => taiVe(anh.blob, anh.ten)} className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs font-semibold hover:border-chinh hover:text-chinh">
-            Tải lại ảnh
-          </button>
-          <span className="text-xs text-green-700">Đã tải ảnh về thư mục Tải xuống.</span>
-        </div>
-      )}
-    </div>
-  )
-}
-
 // Lời để giọng máy đọc: bỏ tên người nói ở đầu dòng ("Tí: ...")
 const loiDeDoc = (s: string) =>
   s
@@ -367,7 +256,7 @@ const KHUNG = 'mt-6 rounded-xl border border-slate-200 bg-white p-4'
 
 type MaAgent = 'nv' | 'kb' | 'dd' | 'bc' | 'vd'
 const TEN_AGENT: Record<MaAgent, string> = { nv: 'Agent nhân vật', kb: 'Agent kịch bản', dd: 'Agent đạo diễn & khán giả YouTube', bc: 'Agent bối cảnh', vd: 'Agent câu lệnh video' }
-const CA_DOI: MaAgent[] = ['nv', 'kb', 'dd', 'bc', 'vd']
+const CA_DOI: MaAgent[] = ['nv', 'kb', 'dd', 'bc']
 const moi = (ds: Omit<Canh, 'id'>[]): Canh[] => ds.map((c) => ({ id: ma(), ...c, video: null }))
 
 function NutAgent({ ma, dang, tat, chay, nhan }: { ma: MaAgent; dang: MaAgent | null; tat: boolean; chay: () => void; nhan: string }) {
@@ -479,7 +368,6 @@ export default function XuongPhim({ coAi }: { coAi: boolean }) {
   const [buoc, setBuoc] = useState('')
   const [loi, setLoi] = useState('')
   const [video, setVideo] = useState<{ url: string; duoi: string } | null>(null)
-  const [tinKhung, setTinKhung] = useState<{ id: string; loi: boolean; chu: string } | null>(null)
 
   // Mở trang: lấy lại bài đang làm dở và ảnh đã tải lên
   useEffect(() => {
@@ -537,21 +425,6 @@ export default function XuongPhim({ coAi }: { coAi: boolean }) {
       if (x[id]) URL.revokeObjectURL(x[id])
       return { ...x, [id]: URL.createObjectURL(tep) }
     })
-  }
-
-  // Lấy khung hình cuối của video vừa làm, đặt làm ảnh đầu cho cảnh sau (nối hai đoạn liền mạch)
-  async function layKhungCuoi(tep: File | undefined, idSau: string, soSau: number) {
-    if (!tep) return
-    const idTruoc = phim.canh[soSau - 2]?.id ?? ''
-    try {
-      const blob = await catKhungCuoi(tep)
-      await chonAnh(idSau, new File([blob], `khung-dau-canh-${soSau}.png`, { type: 'image/png' }))
-      suaCanh(idSau, { tuKhungCuoi: true })
-      taiVe(blob, `khung-dau-canh-${soSau}.png`)
-      setTinKhung({ id: idTruoc, loi: false, chu: `Đã tải ảnh khung cuối về máy và đặt làm ảnh đầu cảnh ${soSau}. Câu lệnh video cảnh ${soSau} đã tự thêm phần nối tiếp.` })
-    } catch (e) {
-      setTinKhung({ id: idTruoc, loi: true, chu: e instanceof Error ? e.message : 'Không lấy được khung cuối' })
-    }
   }
 
   function xoaCanh(id: string) {
@@ -1037,55 +910,6 @@ export default function XuongPhim({ coAi }: { coAi: boolean }) {
       </section>
 
       <OLamPhimMay phim={phim} tat={tatAi} />
-
-      {/* 5. Câu lệnh video */}
-      <section className={KHUNG}>
-        <div className="flex flex-wrap items-center gap-3">
-          <h2 className="text-lg font-bold">6. Câu lệnh video {phim.giay} giây</h2>
-          <NutAgent ma="vd" dang={dangAgent} tat={tatAi} chay={() => chayAgent(['vd'])} nhan="Agent câu lệnh video" />
-        </div>
-        <ol className="mt-2 list-decimal space-y-0.5 pl-5 text-xs text-phu">
-          <li>Mở Gemini, chọn tạo video.</li>
-          <li>Đính kèm ảnh khung đầu của cảnh (và tờ mẫu nhân vật, ảnh bối cảnh nếu Gemini cho đính kèm nhiều ảnh).</li>
-          <li>Bấm Chép câu lệnh video của cảnh đó, dán vào, tạo video. Chưa ưng thì tạo lại 2-3 lần rồi chọn bản tốt nhất.</li>
-          <li>Làm xong video cảnh nào thì bấm Lấy khung cuối ở cảnh đó: trang lấy hình cuối cùng của video làm ảnh đầu cho cảnh sau, để hai đoạn nối liền, không đổi chỗ, không đổi phòng.</li>
-          <li>Tải các đoạn về và nối theo thứ tự cảnh trong CapCut.</li>
-        </ol>
-        <OCatKhung />
-        <ul className="mt-3 space-y-2">
-          {phim.canh.map((c, i) => (
-            <li key={c.id} className="rounded-lg border border-slate-200 p-3">
-              <div className="flex flex-wrap items-center gap-2 text-sm">
-                <span className="font-bold">Cảnh {i + 1}</span>
-                {c.tuKhungCuoi && <span className="rounded bg-blue-100 px-1.5 text-xs text-blue-700">Nối từ khung cuối cảnh trước</span>}
-                <span className={`rounded px-1.5 text-xs ${c.video ? 'bg-green-100 text-green-700' : 'bg-amber-50 text-amber-700'}`}>{c.video ? 'Agent đã viết diễn biến' : 'Chưa có diễn biến chi tiết'}</span>
-                <span className="ml-auto">
-                  <NutChep chu={cauLenhVideo(phim, c, phim.canh[i - 1])} nhan={`Chép câu lệnh video ${phim.giay}s`} chinh />
-                </span>
-              </div>
-              {i < phim.canh.length - 1 && (
-                <label className="mt-2 inline-block cursor-pointer rounded-md border border-slate-300 bg-white px-2 py-1 text-xs font-semibold hover:border-chinh hover:text-chinh">
-                  Lấy khung cuối video cảnh {i + 1} → ảnh đầu cảnh {i + 2}
-                  <input
-                    type="file"
-                    accept="video/*"
-                    className="hidden"
-                    onChange={(e) => {
-                      layKhungCuoi(e.target.files?.[0], phim.canh[i + 1].id, i + 2)
-                      e.target.value = ''
-                    }}
-                  />
-                </label>
-              )}
-              {tinKhung?.id === c.id && <p className={`mt-1 text-xs ${tinKhung.loi ? 'text-red-600' : 'text-green-700'}`}>{tinKhung.chu}</p>}
-              <details className="mt-2">
-                <summary className="cursor-pointer text-xs font-semibold text-chinh">Xem câu lệnh</summary>
-                <pre className="mt-2 max-h-72 overflow-auto whitespace-pre-wrap rounded-md bg-nen p-2 text-xs">{cauLenhVideo(phim, c, phim.canh[i - 1])}</pre>
-              </details>
-            </li>
-          ))}
-        </ul>
-      </section>
 
       {/* 6. Dựng nhanh bằng ảnh tĩnh */}
       <section className={KHUNG}>
