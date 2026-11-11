@@ -3,7 +3,7 @@
 // XƯỞNG ĐẠO CỤ: Gemini vẽ đạo cụ 2D bằng nét hình học → xem trước ngay → chọn món đạt → tải tệp .json
 // Tệp tải về được nạp vào thư viện máy (E:\phim-blender\lam_phim\nhap_do.py).
 import { useEffect, useState } from 'react'
-import { agentVeDaoCu, type DaoCuMoi, type NetVe } from './actions'
+import { agentTimDaoCuThieu, agentVeDaoCu, type DaoCuMoi, type NetVe } from './actions'
 import { DAO_CU_2D } from './danhMuc2d'
 
 const KHOA = 'xuong-dao-cu-v1'
@@ -57,7 +57,10 @@ function XemTruoc({ d }: { d: DaoCuMoi }) {
   )
 }
 
-export default function XuongDaoCu({ tat }: { tat: boolean }) {
+type PhimDoc = { ten: string; yChinh: string; canh: { loi: string; hinh: string }[] }
+
+export default function XuongDaoCu({ tat, phim }: { tat: boolean; phim: PhimDoc }) {
+  const [thieu, setThieu] = useState<{ ten: string; moTa: string; lyDo: string }[]>([])
   const [chu, setChu] = useState('')
   const [ds, setDs] = useState<(DaoCuMoi & { chon: boolean })[]>([])
   const [dang, setDang] = useState('')
@@ -77,8 +80,25 @@ export default function XuongDaoCu({ tat }: { tat: boolean }) {
     } catch {}
   }, [ds, chu])
 
-  async function ve() {
-    const mon = chu.split(/[\n,;]+/).map((x) => x.replace(/^[^:]*:\s*/, '').trim()).filter((x) => x.length > 1)
+  // Đọc truyện, tìm đạo cụ còn thiếu so với thư viện, rồi tự vẽ luôn
+  async function tuTim() {
+    setLoi('')
+    setDang('AI đang đọc câu chuyện để tìm đạo cụ còn thiếu…')
+    const daCo = [...Object.values(DAO_CU_2D).map((d) => d.ten), ...ds.map((d) => d.ten)]
+    const r = await agentTimDaoCuThieu({ ten: phim.ten, yChinh: phim.yChinh, canh: phim.canh.map((c) => ({ loi: c.loi, hinh: c.hinh })) }, daCo)
+    if (!r.ok) {
+      setDang('')
+      return setLoi(r.thongBao)
+    }
+    setThieu(r.thieu)
+    if (!r.thieu.length) return setDang('Thư viện đã đủ đạo cụ cho câu chuyện này.')
+    const danh = r.thieu.map((t) => `${t.ten} (${t.moTa})`)
+    setChu(r.thieu.map((t) => t.ten).join(', '))
+    await ve(danh)
+  }
+
+  async function ve(tuDong?: string[]) {
+    const mon = tuDong ?? chu.split(/[\n,;]+/).map((x) => x.replace(/^[^:]*:\s*/, '').trim()).filter((x) => x.length > 1)
     const daCo = new Set([...Object.keys(DAO_CU_2D), ...ds.map((d) => d.ma)])
     if (!mon.length) return setLoi('Hãy gõ tên các đạo cụ, cách nhau bằng dấu phẩy hoặc xuống dòng')
     setLoi('')
@@ -126,8 +146,11 @@ export default function XuongDaoCu({ tat }: { tat: boolean }) {
       </p>
       <textarea value={chu} onChange={(e) => setChu(e.target.value)} rows={5} placeholder={GOI_Y} className="mt-2 w-full rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm" />
       <div className="mt-2 flex flex-wrap items-center gap-2">
-        <button type="button" onClick={ve} disabled={tat || !!dang.match(/đang/i)} className="rounded-lg bg-chinh px-3 py-1.5 text-sm font-semibold text-white hover:bg-chinh-dam disabled:opacity-50">
-          Gemini vẽ đạo cụ
+        <button type="button" onClick={tuTim} disabled={tat || !!dang.match(/đang/i)} className="rounded-lg bg-chinh px-3 py-1.5 text-sm font-semibold text-white hover:bg-chinh-dam disabled:opacity-50">
+          Tự tìm đạo cụ còn thiếu trong truyện và vẽ
+        </button>
+        <button type="button" onClick={() => ve()} disabled={tat || !!dang.match(/đang/i)} className="rounded-lg border border-chinh px-3 py-1.5 text-sm font-semibold text-chinh hover:bg-white disabled:opacity-50">
+          Vẽ các món đã gõ
         </button>
         <button type="button" onClick={() => setChu(GOI_Y)} className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-semibold hover:bg-slate-50">
           Dùng danh sách gợi ý ({GOI_Y.split(/[\n,]+/).length} món)
@@ -142,6 +165,18 @@ export default function XuongDaoCu({ tat }: { tat: boolean }) {
         )}
       </div>
       {dang && <p className="mt-2 text-sm text-green-700">{dang}</p>}
+      {thieu.length > 0 && (
+        <details className="mt-2 text-xs text-phu">
+          <summary className="cursor-pointer font-semibold">AI thấy truyện cần thêm {thieu.length} món</summary>
+          <ul className="mt-1 list-disc pl-5">
+            {thieu.map((t) => (
+              <li key={t.ten}>
+                <b>{t.ten}</b>: {t.lyDo}
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
       {loi && <p className="mt-2 text-sm text-red-600">{loi}</p>}
       {ds.length > 0 && (
         <ul className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-6">

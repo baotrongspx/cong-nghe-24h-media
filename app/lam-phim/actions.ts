@@ -484,6 +484,30 @@ export async function agentVeDaoCu(moTa: string[]): Promise<KetQua<{ daoCu: DaoC
   return { ok: true, daoCu }
 }
 
+// ---------------- Agent: TÌM ĐẠO CỤ CÒN THIẾU (đọc truyện, so với thư viện) ----------------
+const HE_THIEU = `Bạn là TRỢ LÝ ĐẠO CỤ của xưởng phim hoạt hình 2D. Đọc câu chuyện và liệt kê những ĐỒ VẬT, XE CỘ, CON VẬT, CÂY CỐI mà hình ảnh phim cần thể hiện để người xem hiểu đúng lời kể và lời thoại.
+Chỉ liệt kê món THƯ VIỆN CHƯA CÓ (đã có thì bỏ, kể cả khi tên gọi khác nhưng cùng một vật). Không liệt kê người, nơi chốn, tường, sàn, trời.
+Ưu tiên món nhân vật cầm, đưa, dùng hoặc được nhắc đích danh; sau đó là đồ trang trí làm rõ bối cảnh và thời đại của truyện.
+Mỗi món: ten (tiếng Việt có dấu, ngắn) và mo_ta (hình dáng, màu sắc đặc trưng để họa sĩ vẽ, 1 câu), ly_do (cảnh nào cần, ngắn). Tối đa 24 món. ${CAM_CHUNG}`
+
+export async function agentTimDaoCuThieu(phim: { ten: string; yChinh: string; canh: { loi: string; hinh: string }[] }, daCo: string[]): Promise<KetQua<{ thieu: { ten: string; moTa: string; lyDo: string }[] }>> {
+  const canh = phim.canh.filter((c) => c.loi.trim() || c.hinh.trim()).slice(0, 40)
+  if (!canh.length && cat(phim.yChinh, 20).length < 20) return { ok: false, thongBao: 'Chưa có câu chuyện hay kịch bản để đọc' }
+  const r = await goiAgent<{ thieu?: { ten?: string; mo_ta?: string; ly_do?: string }[] }>(
+    HE_THIEU,
+    `THƯ VIỆN ĐÃ CÓ: ${daCo.map((x) => cat(x, 60)).join(', ')}\n\nTÊN PHIM: ${cat(phim.ten, 120)}\nÝ CHÍNH: ${cat(phim.yChinh, 2000)}\n\nCÁC CẢNH:\n${canh.map((c, i) => `${i + 1}. Lời: ${cat(c.loi, 600)} | Hình: ${cat(c.hinh, 300)}`).join('\n')}`,
+    {
+      type: 'OBJECT',
+      properties: { thieu: { type: 'ARRAY', items: { type: 'OBJECT', properties: { ten: S({}), mo_ta: S({}), ly_do: S({}) }, required: ['ten', 'mo_ta', 'ly_do'] } } },
+      required: ['thieu'],
+    },
+    0.3,
+  )
+  if (!r.ok) return r
+  const thieu = (r.kq.thieu ?? []).map((t) => ({ ten: cat(t.ten, 60), moTa: cat(t.mo_ta, 200), lyDo: cat(t.ly_do, 120) })).filter((t) => t.ten).slice(0, 24)
+  return { ok: true, thieu }
+}
+
 // ---------------- Agent 4: câu lệnh video ----------------
 const HE_VD = (giay: number) => `Bạn là AGENT ĐẠO DIỄN VIDEO. Với từng cảnh, viết diễn biến để AI tạo video (như Veo trong Gemini) dựng một đoạn ${giay} giây liền mạch, bắt đầu từ ảnh khung đầu của cảnh.
 Với mỗi cảnh (giữ đúng số "so"):

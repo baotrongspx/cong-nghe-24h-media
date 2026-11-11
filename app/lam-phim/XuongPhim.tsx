@@ -915,7 +915,7 @@ export default function XuongPhim({ coAi }: { coAi: boolean }) {
       </section>
 
       <OLamPhimMay phim={phim} tat={tatAi} />
-      <XuongDaoCu tat={tatAi} />
+      <XuongDaoCu tat={tatAi} phim={phim} />
 
       {/* 6. Dựng nhanh bằng ảnh tĩnh */}
       <section className={KHUNG}>
