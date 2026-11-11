@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { goiGeminiJson } from '@/lib/gemini'
 import { GIONG, docThanhGiong } from '@/lib/giongNoi'
 import { daMoKhoa, moKhoa } from '@/lib/khoa'
+import { ANH_SANG_2D, DAO_CU_2D, DS_KHU_2D, HANH_DONG_2D, HIEU_UNG_2D, KHU_VUC_2D, MAY_QUAY_2D, THOI_TIET_2D } from './danhMuc2d'
 
 const CHUA_MO = 'Trang đang khóa, hãy tải lại trang và nhập mật khẩu'
 
@@ -311,36 +312,60 @@ export async function agentBoiCanh(phongCach: string, ten: string[], daCo: BoiCa
   return { ok: true, boiCanh }
 }
 
-// ---------------- Agent: kịch bản cho công cụ LAM_PHIM trên máy (Blender 2D) ----------------
-const HD_MAY = ['di', 'chay', 'nhay', 'gat_dau', 'lac_dau', 'nga', 'nam', 'ngoi', 'cui', 'dam', 'da', 'vay', 'chi', 'cam', 'khoc', 'gian', 'ngac_nhien', 'cuoi']
-const HE_MAY = `Bạn chuyển một phim hoạt hình 2D đã viết sẵn thành KỊCH BẢN THOẠI cho máy dựng phim tự động.
-Máy chỉ hiểu: 3 bối cảnh (nha = trong nhà, duong = ngoài phố/hẻm, cong_vien = công viên/sân vườn ngoài trời), lời của từng nhân vật, lời người dẫn truyện (ai = "KE"), và các hành động: ${HD_MAY.join(', ')}.
-Quy tắc:
-- Trường ai PHẢI là "KE" hoặc CHÍNH XÁC một tên trong danh sách nhân vật (chép nguyên văn, có dấu). Phần lớn các câu là lời nhân vật nói với nhau; chỉ câu kể chuyện mới là "KE".
-- Tách lời đọc mỗi cảnh thành từng dòng: câu nhân vật nói trực tiếp thì ai = tên nhân vật đó (đúng tên trong danh sách); câu kể chuyện thì ai = "KE", hoặc ai = tên người kể nếu nhân vật tự kể ở ngôi "tôi".
-- Bỏ các cụm dẫn như "Tôi hỏi:", "Vợ tôi cười:" khỏi lời; thay bằng hành động phù hợp nếu có (vd cười -> cuoi, ngạc nhiên -> ngac_nhien).
-- hanh_dong: một trong danh sách trên hoặc chuỗi rỗng. Dòng chỉ có hành động, không lời, thì loi = "" (vd nhân vật chạy sang nhà khác: chay). Mỗi dòng tối đa 1 hành động. Không lạm dụng: khoảng 1/3 số dòng có hành động.
-- Mỗi dòng lời ngắn, tối đa khoảng 25 chữ. Giữ nguyên ý và câu chữ hài của bản gốc, không thêm tình tiết mới.
-- loai của nhân vật: nam (nam thanh niên/trung niên), nu (nữ), gia (người già).
+// ---------------- Agent: AI ĐẠO DIỄN cho xưởng phim 2D trên máy (LAM_PHIM.bat) ----------------
+// Chỉ được chọn tài nguyên có trong danh mục (danhMuc2d.ts sinh từ máy), để máy dựng được tự động.
+const HD_MAY = [...HANH_DONG_2D] as string[]
+const DO_CAM = Object.entries(DAO_CU_2D).filter(([, v]) => v.cam).map(([m]) => m)
+const HE_MAY = `Bạn là AI ĐẠO DIỄN của một xưởng phim hoạt hình 2D. Bạn chuyển phim đã viết thành KỊCH BẢN DÀN DỰNG cho máy tự dựng.
+Máy CHỈ dựng được các tài nguyên trong danh mục dưới đây, tuyệt đối không bịa mã khác.
+
+KHU VỰC (bối cảnh.khu): ${Object.entries(KHU_VUC_2D).map(([m, t]) => `${m} (${t})`).join('; ')}
+ÁNH SÁNG: ${Object.entries(ANH_SANG_2D).map(([m, t]) => `${m}=${t}`).join(', ')}
+THỜI TIẾT: ${Object.entries(THOI_TIET_2D).map(([m, t]) => `${m}=${t}`).join(', ')}
+HÀNH ĐỘNG: ${HD_MAY.join(', ')}; tương tác đồ: cam (cầm một đồ), dat (đặt đồ đang cầm xuống), dua (đưa đồ đang cầm cho người khác)
+ĐỒ CẦM ĐƯỢC: ${DO_CAM.map((m) => `${m} (${DAO_CU_2D[m].ten})`).join(', ')}
+HIỆU ỨNG: ${Object.entries(HIEU_UNG_2D).map(([m, t]) => `${m}=${t}`).join(', ')}
+GÓC MÁY: ${Object.entries(MAY_QUAY_2D).map(([m, t]) => `${m}=${t}`).join(', ')}
+
+Quy tắc dàn dựng:
+1. Tách lời mỗi cảnh thành từng dòng ngắn (tối đa ~25 chữ). Câu nhân vật nói thì ai = đúng tên nhân vật (chép nguyên văn). Câu kể chuyện thì ai = "KE". Bỏ các cụm dẫn kiểu "Tôi hỏi:", "Vợ cười:" và biến chúng thành hành động.
+2. LỜI KỂ PHẢI KHỚP HÌNH: dòng của "KE" bắt buộc có dien = nhân vật đang làm đúng việc được kể, và hanh_dong / doi_tuong thể hiện việc đó (kể "tôi giấu tiền" thì dien = người kể, hanh_dong = cam, doi_tuong = tien).
+3. Chọn khu vực đúng nơi câu chuyện xảy ra; đổi khu vực khi truyện chuyển chỗ; không để quá 2 đoạn liền nhau cùng một khu vực nếu truyện không bắt buộc.
+4. Ánh sáng theo thời điểm trong truyện (đêm thì dem, đoạn nhớ lại thì hoi_tuong, căng thẳng thì kich_tinh).
+5. Đồ vật: khi lời nhắc tới một đồ có trong danh mục thì cho nhân vật cam đồ đó; muốn trao cho người khác thì dòng sau dùng dua với doi_tuong = tên người nhận. Đồ đang cầm phải được cầm trước rồi mới dat / dua.
+6. Góc máy có chủ đích: mở đầu mỗi khu vực bằng toan hoặc rat_rong; đối thoại xen trung, can, qua_vai; khoảnh khắc sốc dùng dac_ta hoặc day_vao; nhân vật yếu thế goc_cao, oai vệ goc_thap; người chạy dùng lia; kết phim keo_ra.
+7. Hiệu ứng chỉ dùng khi đúng cảm xúc (mồ hôi khi bối rối, tim khi yêu, khói khi tức...). Khoảng một nửa số dòng có hành động, không lạm dụng.
+8. Dòng chỉ có hành động, không lời: loi = "" và dien = người làm.
+9. loai nhân vật: nam, nu hoặc gia (người già).
 ${CAM_CHUNG}`
 
-export type DongMay = { canh: string; ai: string; hanhDong: string; loi: string }
+export type DongMay = { canh: string; anhSang: string; thoiTiet: string; ai: string; dien: string; hanhDong: string; doiTuong: string; hieuUng: string; mayQuay: string; loi: string }
 export async function agentLamPhimMay(phim: { ten: string; nhanVat: { ten: string; moTa: string }[]; canh: { loi: string; hinh: string; boiCanh?: string }[] }): Promise<KetQua<{ nhanVat: { ten: string; loai: string }[]; dong: DongMay[] }>> {
   const nv = phim.nhanVat.filter((n) => n.ten.trim()).slice(0, 6)
   const canh = phim.canh.filter((c) => c.loi.trim()).slice(0, 40)
   if (!canh.length) return { ok: false, thongBao: 'Bảng cảnh chưa có lời đọc nào' }
-  const r = await goiAgent<{ nhan_vat?: { ten?: string; loai?: string }[]; dong?: { canh?: string; ai?: string; hanh_dong?: string; loi?: string }[] }>(
+  const r = await goiAgent<{ nhan_vat?: { ten?: string; loai?: string }[]; dong?: Record<string, string>[] }>(
     HE_MAY,
-    `Tên phim: ${cat(phim.ten, 120)}\n\nNhân vật:\n${nv.map((n) => `- ${cat(n.ten, 40)}: ${cat(n.moTa, 300)}`).join('\n')}\n\nCác cảnh theo thứ tự:\n${canh.map((c, i) => `${i + 1}. [bối cảnh: ${cat(c.boiCanh, 80) || '?'}; hình: ${cat(c.hinh, 300)}] Lời: ${cat(c.loi, 1000)}`).join('\n')}`,
+    `Tên phim: ${cat(phim.ten, 120)}\n\nNhân vật (chỉ dùng đúng các tên này):\n${nv.map((n) => `- ${cat(n.ten, 40)}: ${cat(n.moTa, 300)}`).join('\n')}\n\nCác cảnh theo thứ tự:\n${canh.map((c, i) => `${i + 1}. [nơi: ${cat(c.boiCanh, 80) || '?'}; hình: ${cat(c.hinh, 300)}] Lời: ${cat(c.loi, 1000)}`).join('\n')}`,
     {
       type: 'OBJECT',
       properties: {
         nhan_vat: { type: 'ARRAY', items: { type: 'OBJECT', properties: { ten: S({}), loai: S({ enum: ['nam', 'nu', 'gia'] }) }, required: ['ten', 'loai'] } },
-        dong: { type: 'ARRAY', items: { type: 'OBJECT', properties: { canh: S({ enum: ['nha', 'duong', 'cong_vien'] }), ai: S({}), hanh_dong: S({}), loi: S({}) }, required: ['canh', 'ai', 'hanh_dong', 'loi'] } },
+        dong: {
+          type: 'ARRAY',
+          items: {
+            type: 'OBJECT',
+            properties: {
+              canh: S({ enum: [...DS_KHU_2D] }), anh_sang: S({ enum: Object.keys(ANH_SANG_2D) }), thoi_tiet: S({ enum: Object.keys(THOI_TIET_2D) }),
+              ai: S({}), dien: S({}), hanh_dong: S({}), doi_tuong: S({}), hieu_ung: S({}), may_quay: S({}), loi: S({}),
+            },
+            required: ['canh', 'anh_sang', 'thoi_tiet', 'ai', 'dien', 'hanh_dong', 'doi_tuong', 'hieu_ung', 'may_quay', 'loi'],
+          },
+        },
       },
       required: ['nhan_vat', 'dong'],
     },
-    0.4,
+    0.5,
   )
   if (!r.ok) return r
   // Khớp tên AI trả về với tên thật (không phân biệt hoa thường, chấp nhận thiếu/thừa danh xưng như "Chị Na" / "Na")
@@ -354,15 +379,39 @@ export async function agentLamPhimMay(phim: { ten: string; nhanVat: { ten: strin
     const t = khop(n.ten)
     return t ? [{ ten: t, loai: ['nam', 'nu', 'gia'].includes(String(n.loai)) ? String(n.loai) : 'nam' }] : []
   })
-  const dong = (r.kq.dong ?? [])
-    .map((d) => ({
-      canh: ['nha', 'duong', 'cong_vien'].includes(String(d.canh)) ? String(d.canh) : 'nha',
-      ai: khop(d.ai) ?? 'KE',
-      hanhDong: HD_MAY.includes(String(d.hanh_dong)) ? String(d.hanh_dong) : '',
-      loi: cat(d.loi, 300).replace(/[\r\n:\[\]]+/g, ' ').trim(),
-    }))
-    .map((d) => (d.ai === 'KE' ? { ...d, hanhDong: '' } : d))
-    .filter((d) => d.loi || d.hanhDong)
+  const trong = (v: unknown, ds: string[]) => (ds.includes(String(v)) ? String(v) : '')
+  const dong: DongMay[] = []
+  const dangCam = new Map<string, string>()
+  for (const d of r.kq.dong ?? []) {
+    const ai = khop(d.ai) ?? 'KE'
+    const dien = khop(d.dien) ?? (ai === 'KE' ? '' : ai)
+    let hanhDong = trong(d.hanh_dong, [...HD_MAY, 'cam', 'dat', 'dua'])
+    let doiTuong = ''
+    if (hanhDong === 'cam') doiTuong = trong(d.doi_tuong, DO_CAM)
+    if (hanhDong === 'dua') doiTuong = khop(d.doi_tuong) ?? ''
+    // máy sẽ báo lỗi nếu thiếu: bỏ những hành động không đủ thông tin thay vì làm hỏng cả kịch bản
+    if (!dien || (hanhDong === 'cam' && !doiTuong) || (hanhDong === 'dua' && (!doiTuong || !dangCam.get(dien))) || (hanhDong === 'dat' && !dangCam.get(dien))) {
+      hanhDong = ''
+      doiTuong = ''
+    }
+    if (hanhDong === 'cam') dangCam.set(dien, doiTuong)
+    if (hanhDong === 'dat') dangCam.delete(dien)
+    if (hanhDong === 'dua') {
+      dangCam.set(doiTuong, dangCam.get(dien) ?? '')
+      dangCam.delete(dien)
+    }
+    const loi = cat(d.loi, 300).replace(/[\r\n:[\]{}()]+/g, ' ').replace(/\s+/g, ' ').trim()
+    if (!loi && !hanhDong) continue
+    dong.push({
+      canh: trong(d.canh, [...DS_KHU_2D]) || 'nha.phong_khach',
+      anhSang: trong(d.anh_sang, Object.keys(ANH_SANG_2D)) || 'sang',
+      thoiTiet: trong(d.thoi_tiet, Object.keys(THOI_TIET_2D)) || 'nang',
+      ai, dien, hanhDong, doiTuong,
+      hieuUng: trong(d.hieu_ung, Object.keys(HIEU_UNG_2D)),
+      mayQuay: trong(d.may_quay, Object.keys(MAY_QUAY_2D)),
+      loi,
+    })
+  }
   if (!dong.length) return { ok: false, thongBao: 'AI chưa chuyển được kịch bản, hãy bấm thử lại' }
   return { ok: true, nhanVat, dong }
 }

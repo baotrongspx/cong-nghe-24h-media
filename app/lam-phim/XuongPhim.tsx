@@ -170,14 +170,18 @@ function OLamPhimMay({ phim, tat }: { phim: Phim; tat: boolean }) {
         ...phim.nhanVat.filter((n) => n.ten.trim()).map((n) => `NHAN VAT: ${n.ten.trim()} | ${loai.get(n.ten.trim()) ?? ''} |`),
         'NGUOI KE: Thiện Minh',
       ]
-      let canh = ''
+      let khoa = ''
       for (const d of r.dong) {
-        if (d.canh !== canh) {
-          canh = d.canh
-          dong.push('', `CANH: ${canh}`)
+        const k = `${d.canh} | ${d.anhSang} | ${d.thoiTiet}`
+        if (k !== khoa) {
+          khoa = k
+          dong.push('', `CANH: ${k}`)
         }
-        if (!d.loi) dong.push(`[${d.ai} ${d.hanhDong}]`)
-        else dong.push(`${d.ai}${d.hanhDong ? ` [${d.hanhDong}]` : ''}: ${d.loi}`)
+        const nguoiDien = d.ai === 'KE' || !d.loi ? `${d.dien} ` : ''
+        const hd = d.hanhDong ? `[${nguoiDien}${d.hanhDong}${d.doiTuong ? ` ${d.doiTuong}` : ''}]` : d.ai === 'KE' && d.dien ? `[${d.dien} dung]` : ''
+        const them = [hd, d.hieuUng && `{${d.hieuUng}}`, d.mayQuay && `(${d.mayQuay})`].filter(Boolean).join(' ')
+        if (!d.loi) dong.push(them)
+        else dong.push(`${d.ai}${them ? ` ${them}` : ''}: ${d.loi}`)
       }
       const ten = (phim.ten.trim() || 'kich-ban').replace(/[\/:*?"<>|]+/g, '') + '.txt'
       taiVe(new Blob(['\ufeff' + dong.join('\r\n') + '\r\n'], { type: 'text/plain;charset=utf-8' }), ten)
