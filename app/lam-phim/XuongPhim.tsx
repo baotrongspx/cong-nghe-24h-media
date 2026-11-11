@@ -254,8 +254,24 @@ function BaoCao({ d }: { d: DanhGia }) {
       <Muc so={2} ten="Điểm mạnh và điểm yếu">
         <p className="font-semibold text-green-700">Điểm mạnh</p>
         <Ds ds={d.diemManh} />
-        <p className="mt-2 font-semibold text-red-700">Điểm yếu</p>
-        <Ds ds={d.diemYeu} />
+        <p className="mt-2 font-semibold text-red-700">Điểm yếu → biến thành điểm mạnh</p>
+        {d.diemYeu.length ? (
+          <ul className="space-y-2">
+            {d.diemYeu.map((x, i) =>
+              typeof x === 'string' ? (
+                <li key={i}>{x}</li>
+              ) : (
+                <li key={i} className="rounded-md bg-nen p-2">
+                  <p className="text-red-700">✗ {x.yeu}</p>
+                  <p className="text-green-700">✓ {x.manh}</p>
+                  {x.canh && <p className="text-xs text-phu">Đã áp dụng ở: {x.canh}</p>}
+                </li>
+              ),
+            )}
+          </ul>
+        ) : (
+          <p className="text-phu">Không có.</p>
+        )}
       </Muc>
       <Muc so={3} ten="Sức hút 30 giây đầu">{d.moDau}</Muc>
       <Muc so={4} ten="Khả năng giữ chân người xem">{d.giuChan}</Muc>
@@ -652,7 +668,7 @@ export default function XuongPhim({ coAi }: { coAi: boolean }) {
           <ol className="mt-1 list-decimal space-y-0.5 pl-5 text-xs text-phu">
             <li>Agent nhân vật: thiết kế nhân vật và viết câu lệnh vẽ tờ mẫu cho Gemini.</li>
             <li>Agent kịch bản: chia câu chuyện thành từng cảnh {phim.giay} giây, có lời thoại và hành động.</li>
-            <li>Agent đạo diễn & khán giả YouTube: chấm kịch bản theo 10 mục (mở đầu, giữ chân, cảnh thừa, tiêu đề, ảnh thu nhỏ…) và viết lại bản đã sửa.</li>
+            <li>Agent đạo diễn & khán giả YouTube: chấm kịch bản theo 10 mục, biến từng điểm yếu thành điểm mạnh và viết lại bản đã sửa.</li>
             <li>Agent bối cảnh: tả từng nơi chốn và viết câu lệnh vẽ ảnh nền trống cho Gemini.</li>
             <li>Agent câu lệnh video: viết câu lệnh {phim.giay} giây cho từng cảnh để dán vào Gemini làm video.</li>
           </ol>
@@ -813,7 +829,7 @@ export default function XuongPhim({ coAi }: { coAi: boolean }) {
           <h2 className="text-lg font-bold">4. Đạo diễn & khán giả YouTube</h2>
           <NutAgent ma="dd" dang={dangAgent} tat={tatAi} chay={() => chayAgent(['dd'])} nhan="Agent đạo diễn chấm kịch bản" />
         </div>
-        <p className="mt-1 text-xs text-phu">Chấm kịch bản như một đạo diễn và một người xem YouTube khó tính, chỉ ra cảnh yếu, rồi viết lại bản đã sửa để bạn chọn dùng hay không.</p>
+        <p className="mt-1 text-xs text-phu">Chấm kịch bản như một đạo diễn và một người xem YouTube khó tính, biến từng điểm yếu thành điểm mạnh, rồi viết lại bản đã sửa để bạn chọn dùng hay không. Dùng bản sửa xong có thể bấm chấm lại để xem còn điểm yếu nào.</p>
         {phim.banSua?.length ? (
           <div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg bg-amber-50 p-3 text-sm">
             <span className="font-semibold text-amber-900">Có kịch bản đã sửa ({phim.banSua.length} cảnh).</span>

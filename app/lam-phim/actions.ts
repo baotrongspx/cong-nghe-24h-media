@@ -135,7 +135,7 @@ export async function agentKichBan(yChinh: string, soCanh: number, giay: number,
 export type DanhGia = {
   tongThe: string
   diemManh: string[]
-  diemYeu: string[]
+  diemYeu: { yeu: string; manh: string; canh: string }[]
   moDau: string
   giuChan: string
   daoDien: string
@@ -155,7 +155,7 @@ const HE_DD = (giay: number, soTu: number) => `Bạn đồng thời đóng HAI v
 
 Mục tiêu: tăng tỉ lệ bấm xem, giữ chân từ giây đầu, tăng thời lượng xem, tạo cảm xúc để xem đến cuối và muốn xem video tiếp theo. Hình đẹp không đồng nghĩa với sức hút.
 
-Nhiệm vụ: đánh giá kịch bản được gửi theo đủ các mục, rồi VIẾT LẠI kịch bản đã sửa (canh_moi).
+Nhiệm vụ: đánh giá kịch bản được gửi theo đủ các mục. Với MỖI điểm yếu, đừng chỉ chê: chỉ ra cách BIẾN CHÍNH ĐIỂM YẾU ĐÓ THÀNH ĐIỂM MẠNH (ví dụ cảnh chậm thành khoảng lặng gây hồi hộp, chi tiết thừa thành chi tiết cài để trả lại ở cú lật, nhân vật nhạt thành tật xấu đáng yêu gây cười). Sau đó VIẾT LẠI kịch bản đã sửa (canh_moi) áp dụng ĐỦ mọi cách biến điểm yếu thành điểm mạnh đó.
 Nguyên tắc: không khen xã giao, không nói chung chung; mỗi lỗi phải chỉ rõ cảnh nào và cách sửa cụ thể, giải thích vì sao người xem sẽ thấy hay hơn. Phân biệt dữ kiện với nhận định và giả thuyết. Không giật tít sai sự thật, không kéo dài cho đủ thời lượng, không hứa chắc viral hay được đề xuất.
 
 Ràng buộc khi viết lại canh_moi (thể loại hài đời thường 2D chibi, giữ nguyên thể loại):
@@ -181,7 +181,7 @@ export async function agentDaoDien(
   const r = await goiAgent<{
     tong_the?: string
     diem_manh?: string[]
-    diem_yeu?: string[]
+    diem_yeu?: { diem_yeu?: string; bien_thanh_diem_manh?: string; canh?: string }[]
     mo_dau_30_giay?: string
     giu_chan?: string
     dao_dien?: string
@@ -202,7 +202,15 @@ export async function agentDaoDien(
       properties: {
         tong_the: S({ description: '1. Đánh giá tổng thể, 2-3 câu' }),
         diem_manh: { ...mang, description: '2. Điểm mạnh' },
-        diem_yeu: { ...mang, description: '2. Điểm yếu' },
+        diem_yeu: {
+          type: 'ARRAY',
+          description: '2. Điểm yếu, kèm cách biến chính điểm yếu đó thành điểm mạnh',
+          items: {
+            type: 'OBJECT',
+            properties: { diem_yeu: S({}), bien_thanh_diem_manh: S({ description: 'Cách biến điểm yếu này thành điểm mạnh, cụ thể' }), canh: S({ description: 'Áp dụng ở cảnh nào của kịch bản mới' }) },
+            required: ['diem_yeu', 'bien_thanh_diem_manh', 'canh'],
+          },
+        },
         mo_dau_30_giay: S({ description: '3. Phân tích sức hút 30 giây đầu' }),
         giu_chan: S({ description: '4. Khả năng giữ chân, chỉ rõ cảnh có nguy cơ khiến người xem rời đi' }),
         dao_dien: S({ description: '5. Hình ảnh, góc máy, diễn xuất, âm thanh' }),
@@ -249,7 +257,10 @@ export async function agentDaoDien(
     danhGia: {
       tongThe: cat(k.tong_the, 800),
       diemManh: ds2(k.diem_manh),
-      diemYeu: ds2(k.diem_yeu),
+      diemYeu: (k.diem_yeu ?? [])
+        .map((x) => ({ yeu: cat(x.diem_yeu, 400), manh: cat(x.bien_thanh_diem_manh, 500), canh: cat(x.canh, 100) }))
+        .filter((x) => x.yeu)
+        .slice(0, 10),
       moDau: cat(k.mo_dau_30_giay, 800),
       giuChan: cat(k.giu_chan, 800),
       daoDien: cat(k.dao_dien, 800),
