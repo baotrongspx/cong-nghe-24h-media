@@ -394,14 +394,21 @@ export default function XuongPhim({ coAi }: { coAi: boolean }) {
       return { ...p, ten: dy.ten || p.ten, canh: moiCanh, danhGia: null, banSua: null }
     }
     if (maAgent === 'dd') {
-      const r = await agentDaoDien(
-        p.giay,
-        p.ten,
-        p.canh.map((c) => ({ boiCanh: c.boiCanh ?? '', nhanVat: c.nhanVat ?? nhanVatTrongCanh(p, c).map((n) => n.ten), viTri: c.viTri ?? '', hanhDong: c.hanhDong ?? '', loi: c.loi, hinh: c.hinh })),
-        p.nhanVat.map((n) => ({ ten: n.ten, moTa: n.moTa, tinhCach: n.tinhCach ?? '', giong: n.giong ?? '' })),
-      )
-      if (!r.ok) throw new Error(r.thongBao)
-      return { ...p, danhGia: r.danhGia, banSua: r.canh.length ? moi(r.canh) : null }
+      // Rà từng đợt 12 cảnh cho tới hết phim; đợt nào bản sửa ngắn hụt thì giữ nguyên bản gốc của đợt đó
+      const nv = p.nhanVat.map((n) => ({ ten: n.ten, moTa: n.moTa, tinhCach: n.tinhCach ?? '', giong: n.giong ?? '' }))
+      const LO = 12
+      let danhGia: DanhGia | null = null
+      const banSua: Canh[] = []
+      for (let i = 0; i < p.canh.length; i += LO) {
+        const lo = p.canh.slice(i, i + LO)
+        if (p.canh.length > LO) setTinAgent({ loai: 'ok', chu: `Đạo diễn đang rà cảnh ${i + 1}-${i + lo.length} / ${p.canh.length}…` })
+        let r = await agentDaoDien(p.giay, p.ten, lo.map((c) => ({ boiCanh: c.boiCanh ?? '', nhanVat: c.nhanVat ?? nhanVatTrongCanh(p, c).map((n) => n.ten), viTri: c.viTri ?? '', hanhDong: c.hanhDong ?? '', loi: c.loi, hinh: c.hinh })), nv)
+        if (!r.ok) r = await agentDaoDien(p.giay, p.ten, lo.map((c) => ({ boiCanh: c.boiCanh ?? '', nhanVat: c.nhanVat ?? nhanVatTrongCanh(p, c).map((n) => n.ten), viTri: c.viTri ?? '', hanhDong: c.hanhDong ?? '', loi: c.loi, hinh: c.hinh })), nv)
+        if (!r.ok) throw new Error(`Cảnh ${i + 1}-${i + lo.length}: ${r.thongBao}`)
+        danhGia = danhGia ?? r.danhGia
+        banSua.push(...(r.canh.length >= Math.ceil(lo.length * 0.8) ? moi(r.canh) : lo))
+      }
+      return { ...p, danhGia, banSua: banSua.length >= p.canh.length * 0.8 ? banSua : null }
     }
     if (maAgent === 'bc') {
       const ten = p.canh.map((c) => c.boiCanh ?? '').filter(Boolean)
@@ -426,7 +433,7 @@ export default function XuongPhim({ coAi }: { coAi: boolean }) {
       for (const m of ds) {
         p = await lamAgent(m, p)
         // Chạy cả đội: kịch bản đã sửa của agent đạo diễn được dùng luôn cho các agent sau
-        if (m === 'dd' && ds.length > 1 && p.banSua?.length) p = apDung(p)
+        if (m === 'dd' && ds.length > 1 && p.banSua && p.banSua.length >= p.canh.length * 0.8) p = apDung(p)
         setPhim(p)
         xong++
       }

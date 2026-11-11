@@ -591,7 +591,7 @@ Chỉ liệt kê món THƯ VIỆN CHƯA CÓ (đã có thì bỏ, kể cả khi t
 Mỗi món: ten (tiếng Việt có dấu, ngắn) và mo_ta (hình dáng, màu sắc đặc trưng để họa sĩ vẽ, 1 câu), ly_do (cảnh nào cần, ngắn). Tối đa 24 món. ${CAM_CHUNG}`
 
 export async function agentTimDaoCuThieu(phim: { ten: string; yChinh: string; canh: { loi: string; hinh: string }[] }, daCo: string[]): Promise<KetQua<{ thieu: { ten: string; moTa: string; lyDo: string }[] }>> {
-  const canh = phim.canh.filter((c) => c.loi.trim() || c.hinh.trim()).slice(0, 40)
+  const canh = phim.canh.filter((c) => c.loi.trim() || c.hinh.trim()).slice(0, 80)
   if (!canh.length && cat(phim.yChinh, 20).length < 20) return { ok: false, thongBao: 'Chưa có câu chuyện hay kịch bản để đọc' }
   const r = await goiAgent<{ thieu?: { ten?: string; mo_ta?: string; ly_do?: string }[] }>(
     HE_THIEU,
