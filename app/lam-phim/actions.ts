@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { goiGeminiJson } from '@/lib/gemini'
 import { GIONG, docThanhGiong } from '@/lib/giongNoi'
 import { daMoKhoa, moKhoa } from '@/lib/khoa'
-import { ANH_SANG_2D, DAO_CU_2D, DS_KHU_2D, HANH_DONG_2D, HIEU_UNG_2D, KHU_VUC_2D, MAY_QUAY_2D, THOI_TIET_2D } from './danhMuc2d'
+import { ANH_SANG_2D, CAM_XUC_2D, CHUYEN_CANH_2D, DANG_NGUOI_2D, PHU_KIEN_2D, DAO_CU_2D, DS_KHU_2D, HANH_DONG_2D, HIEU_UNG_2D, KHU_VUC_2D, MAY_QUAY_2D, THOI_TIET_2D } from './danhMuc2d'
 
 const CHUA_MO = 'Trang đang khóa, hãy tải lại trang và nhập mật khẩu'
 
@@ -328,6 +328,10 @@ HÀNH ĐỘNG: ${HD_MAY.join(', ')}; tương tác đồ: cam (cầm một đồ)
 XE CHỞ NGƯỜI: ${XE_CHO.map((m) => `${m} (${DAO_CU_2D[m].ten}${DAO_CU_2D[m].cho_khach ? ', chở thêm 1 khách' : ''})`).join(', ')}; đi xe: lai (doi_tuong = mã xe), ngoi_xe (doi_tuong = tên người đang lái), xuong_xe
 HIỆU ỨNG: ${Object.entries(HIEU_UNG_2D).map(([m, t]) => `${m}=${t}`).join(', ')}
 GÓC MÁY: ${Object.entries(MAY_QUAY_2D).map(([m, t]) => `${m}=${t}`).join(', ')}
+CẢM XÚC: ${Object.entries(CAM_XUC_2D).map(([m, t]) => `${m}=${t}`).join(', ')}
+CHUYỂN CẢNH (khi sang khu vực mới): ${Object.entries(CHUYEN_CANH_2D).map(([m, t]) => `${m}=${t}`).join(', ')}
+DÁNG NGƯỜI: ${Object.entries(DANG_NGUOI_2D).map(([m, t]) => `${m}=${t}`).join(', ')}
+PHỤ KIỆN: ${Object.entries(PHU_KIEN_2D).map(([m, t]) => `${m}=${t}`).join(', ')}
 
 Quy tắc dàn dựng:
 1. Tách lời mỗi cảnh thành từng dòng ngắn (tối đa ~25 chữ). Câu nhân vật nói thì ai = đúng tên nhân vật (chép nguyên văn). Câu kể chuyện thì ai = "KE". Bỏ các cụm dẫn kiểu "Tôi hỏi:", "Vợ cười:" và biến chúng thành hành động.
@@ -345,30 +349,33 @@ Quy tắc dàn dựng:
    Nhân vật mới xuất hiện trong phòng thì nên vao_cua; rời phòng thì ra_cua. Gọi điện thì goi_dien chứ không chỉ cầm điện thoại.
 12. Với mỗi dòng có hành động, ghi vào phan_tich một câu ngắn: nhân vật muốn làm gì → chạm vào đồ gì → kết quả. Hành động phải khớp đúng với lời nói và lời kể của dòng đó.
 10. Đi xe: người lái "lai" một xe trong danh sách XE CHỞ NGƯỜI, người đi cùng "ngoi_xe" với doi_tuong = tên người lái, rồi người lái "di" hoặc "chay" là cả xe chạy; tới nơi thì người lái "xuong_xe". Đổi khu vực thì tự xuống xe.
-9. loai nhân vật: nam, nu hoặc gia (người già).
+9. Thiết kế nhân vật theo mô tả: dang (nam, nu, gia, be_trai, be_gai), phu_kien (chọn trong danh sách, có thể rỗng), mau_ao, mau_quan, mau_toc dạng #RRGGBB theo đúng mô tả ngoại hình (để rỗng nếu mô tả không nói). Giữ cố định suốt phim.
+13. Mỗi dòng có cam_xuc đúng tâm trạng nhân vật lúc đó (vui, buồn, giận, sợ, ngạc nhiên, suy tư...), để khuôn mặt diễn theo. Khi đổi khu vực chọn chuyen_canh hợp nhịp truyện (tron cho cảnh hài kết thúc, mo_dan cho thời gian trôi, quet cho đổi chỗ nhanh, cat cho liền mạch).
+14. Vật lý: nem (ném đồ đang cầm, doi_tuong = người bị ném trúng hoặc rỗng), lam_roi (làm rơi đồ đang cầm).
 ${CAM_CHUNG}`
 
-export type DongMay = { canh: string; anhSang: string; thoiTiet: string; ai: string; dien: string; hanhDong: string; doiTuong: string; hieuUng: string; mayQuay: string; loi: string }
-export async function agentLamPhimMay(phim: { ten: string; nhanVat: { ten: string; moTa: string }[]; canh: { loi: string; hinh: string; boiCanh?: string }[] }): Promise<KetQua<{ nhanVat: { ten: string; loai: string }[]; dong: DongMay[] }>> {
+export type DongMay = { canh: string; anhSang: string; thoiTiet: string; chuyen: string; ai: string; dien: string; hanhDong: string; doiTuong: string; hieuUng: string; mayQuay: string; camXuc: string; loi: string }
+export type NhanVatMay = { ten: string; loai: string; phuKien: string[]; mau: Record<string, string> }
+export async function agentLamPhimMay(phim: { ten: string; nhanVat: { ten: string; moTa: string }[]; canh: { loi: string; hinh: string; boiCanh?: string }[] }): Promise<KetQua<{ nhanVat: NhanVatMay[]; dong: DongMay[] }>> {
   const nv = phim.nhanVat.filter((n) => n.ten.trim()).slice(0, 6)
   const canh = phim.canh.filter((c) => c.loi.trim()).slice(0, 40)
   if (!canh.length) return { ok: false, thongBao: 'Bảng cảnh chưa có lời đọc nào' }
-  const r = await goiAgent<{ nhan_vat?: { ten?: string; loai?: string }[]; dong?: Record<string, string>[] }>(
+  const r = await goiAgent<{ nhan_vat?: { ten?: string; dang?: string; phu_kien?: string[]; mau_ao?: string; mau_quan?: string; mau_toc?: string }[]; dong?: Record<string, string>[] }>(
     HE_MAY,
     `Tên phim: ${cat(phim.ten, 120)}\n\nNhân vật (chỉ dùng đúng các tên này):\n${nv.map((n) => `- ${cat(n.ten, 40)}: ${cat(n.moTa, 300)}`).join('\n')}\n\nCác cảnh theo thứ tự:\n${canh.map((c, i) => `${i + 1}. [nơi: ${cat(c.boiCanh, 80) || '?'}; hình: ${cat(c.hinh, 300)}] Lời: ${cat(c.loi, 1000)}`).join('\n')}`,
     {
       type: 'OBJECT',
       properties: {
-        nhan_vat: { type: 'ARRAY', items: { type: 'OBJECT', properties: { ten: S({}), loai: S({ enum: ['nam', 'nu', 'gia'] }) }, required: ['ten', 'loai'] } },
+        nhan_vat: { type: 'ARRAY', items: { type: 'OBJECT', properties: { ten: S({}), dang: S({ enum: Object.keys(DANG_NGUOI_2D) }), phu_kien: { type: 'ARRAY', items: S({ enum: Object.keys(PHU_KIEN_2D) }) }, mau_ao: S({}), mau_quan: S({}), mau_toc: S({}) }, required: ['ten', 'dang', 'phu_kien', 'mau_ao', 'mau_quan', 'mau_toc'] } },
         dong: {
           type: 'ARRAY',
           items: {
             type: 'OBJECT',
             properties: {
               canh: S({ enum: [...DS_KHU_2D] }), anh_sang: S({ enum: Object.keys(ANH_SANG_2D) }), thoi_tiet: S({ enum: Object.keys(THOI_TIET_2D) }),
-              ai: S({}), dien: S({}), phan_tich: S({}), hanh_dong: S({}), doi_tuong: S({}), hieu_ung: S({}), may_quay: S({}), loi: S({}),
+              ai: S({}), dien: S({}), phan_tich: S({}), hanh_dong: S({}), doi_tuong: S({}), hieu_ung: S({}), may_quay: S({}), cam_xuc: S({}), chuyen_canh: S({}), loi: S({}),
             },
-            required: ['canh', 'anh_sang', 'thoi_tiet', 'ai', 'dien', 'phan_tich', 'hanh_dong', 'doi_tuong', 'hieu_ung', 'may_quay', 'loi'],
+            required: ['canh', 'anh_sang', 'thoi_tiet', 'ai', 'dien', 'phan_tich', 'hanh_dong', 'doi_tuong', 'hieu_ung', 'may_quay', 'cam_xuc', 'chuyen_canh', 'loi'],
           },
         },
       },
@@ -386,7 +393,12 @@ export async function agentLamPhimMay(phim: { ten: string; nhanVat: { ten: strin
   }
   const nhanVat = (r.kq.nhan_vat ?? []).flatMap((n) => {
     const t = khop(n.ten)
-    return t ? [{ ten: t, loai: ['nam', 'nu', 'gia'].includes(String(n.loai)) ? String(n.loai) : 'nam' }] : []
+    const hex = (x: unknown) => (/^#[0-9a-f]{6}$/i.test(String(x)) ? String(x) : '')
+    const mau: Record<string, string> = {}
+    if (hex(n.mau_ao)) mau.ao = hex(n.mau_ao)
+    if (hex(n.mau_quan)) mau.quan = hex(n.mau_quan)
+    if (hex(n.mau_toc)) mau.toc = hex(n.mau_toc)
+    return t ? [{ ten: t, loai: n.dang && n.dang in DANG_NGUOI_2D ? n.dang : 'nam', phuKien: (n.phu_kien ?? []).filter((p) => p in PHU_KIEN_2D), mau }] : []
   })
   const trong = (v: unknown, ds: string[]) => (ds.includes(String(v)) ? String(v) : '')
   const dong: DongMay[] = []
@@ -433,6 +445,8 @@ export async function agentLamPhimMay(phim: { ten: string; nhanVat: { ten: strin
       thoiTiet: trong(d.thoi_tiet, Object.keys(THOI_TIET_2D)) || 'nang',
       ai, dien, hanhDong, doiTuong,
       hieuUng: trong(d.hieu_ung, Object.keys(HIEU_UNG_2D)),
+      camXuc: trong(d.cam_xuc, Object.keys(CAM_XUC_2D)),
+      chuyen: trong(d.chuyen_canh, Object.keys(CHUYEN_CANH_2D)),
       mayQuay: trong(d.may_quay, Object.keys(MAY_QUAY_2D)),
       loi,
     })

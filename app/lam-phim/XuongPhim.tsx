@@ -165,10 +165,11 @@ function OLamPhimMay({ phim, tat }: { phim: Phim; tat: boolean }) {
       const r = await agentLamPhimMay({ ten: phim.ten, nhanVat: phim.nhanVat, canh: phim.canh })
       if (!r.ok) throw new Error(r.thongBao)
       const loai = new Map(r.nhanVat.map((n) => [n.ten, n.loai]))
+      const them = new Map(r.nhanVat.map((n) => [n.ten, [...n.phuKien, ...Object.entries(n.mau).map(([k, v]) => `${k}=${v}`)].join(', ')]))
       const dong: string[] = [
         '# Kịch bản tải từ trang Làm phim. Kéo thả tệp này vào E:\\phim-blender\\LAM_PHIM.bat',
         `TEN: ${phim.ten.replace(/[\r\n]+/g, ' ')}`,
-        ...phim.nhanVat.filter((n) => n.ten.trim()).map((n) => `NHAN VAT: ${n.ten.trim()} | ${loai.get(n.ten.trim()) ?? ''} |`),
+        ...phim.nhanVat.filter((n) => n.ten.trim()).map((n) => `NHAN VAT: ${n.ten.trim()} | ${loai.get(n.ten.trim()) ?? ''} | | ${them.get(n.ten.trim()) ?? ''}`),
         'NGUOI KE: Thiện Minh',
       ]
       let khoa = ''
@@ -176,11 +177,11 @@ function OLamPhimMay({ phim, tat }: { phim: Phim; tat: boolean }) {
         const k = `${d.canh} | ${d.anhSang} | ${d.thoiTiet}`
         if (k !== khoa) {
           khoa = k
-          dong.push('', `CANH: ${k}`)
+          dong.push('', `CANH: ${k}${d.chuyen ? ` | ${d.chuyen}` : ''}`)
         }
         const nguoiDien = d.ai === 'KE' || !d.loi ? `${d.dien} ` : ''
         const hd = d.hanhDong ? `[${nguoiDien}${d.hanhDong}${d.doiTuong ? ` ${d.doiTuong}` : ''}]` : d.ai === 'KE' && d.dien ? `[${d.dien} dung]` : ''
-        const them = [hd, d.hieuUng && `{${d.hieuUng}}`, d.mayQuay && `(${d.mayQuay})`].filter(Boolean).join(' ')
+        const them = [hd, d.hieuUng && `{${d.hieuUng}}`, d.mayQuay && `(${d.mayQuay})`, d.loi && d.camXuc && d.camXuc !== 'binh_thuong' && `<${d.camXuc}>`].filter(Boolean).join(' ')
         if (!d.loi) dong.push(them)
         else dong.push(`${d.ai}${them ? ` ${them}` : ''}: ${d.loi}`)
       }
