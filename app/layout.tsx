@@ -10,7 +10,7 @@ const chu = Be_Vietnam_Pro({
 
 export const metadata: Metadata = {
   title: 'Xưởng phim hoạt hình — Công Nghệ 24H Media',
-  description: 'Công cụ làm phim hoạt hình kể chuyện: bảng cảnh, câu lệnh vẽ ảnh, giọng đọc AI, dựng video 16:9.',
+  description: 'Studio hoạt hình 2D tự động: AI viết truyện, thiết kế nhân vật, dàn dựng cảnh, máy nhà lồng tiếng và xuất phim tới 15 phút.',
   robots: { index: false },
 }
 

@@ -140,8 +140,8 @@ export default function XuongDaoCu({ tat, phim }: { tat: boolean; phim: PhimDoc 
 
   const soChon = ds.filter((d) => d.chon).length
   return (
-    <section className="mt-6 rounded-xl border border-slate-200 bg-white p-4">
-      <h2 className="text-lg font-bold">Xưởng đạo cụ (Gemini vẽ)</h2>
+    <section id="dao-cu" className="mt-6 scroll-mt-24 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+      <h2 className="flex items-center gap-2.5 text-lg font-bold text-slate-900"><span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-chinh text-sm font-bold text-white">6</span>Xưởng đạo cụ <span className="text-sm font-medium text-phu">(Gemini vẽ)</span></h2>
       <p className="mt-1 text-xs text-phu">
         Gõ tên đạo cụ cần thêm (phẩy hoặc xuống dòng). Gemini vẽ theo đúng nét của xưởng phim, xem trước ngay bên dưới. Bỏ chọn món xấu hoặc bấm Vẽ lại, rồi tải bộ đạo cụ về. Thư viện hiện có {Object.keys(DAO_CU_2D).length} món.
       </p>

@@ -79,10 +79,12 @@ export async function agentNhanVat(yChinh: string, phongCach: string, daCo: Nhan
 }
 
 // ---------------- Agent 2: kịch bản ----------------
-const HE_KB = (giay: number, soTu: number) => `Bạn là AGENT BIÊN KỊCH phim hoạt hình 2D chibi, thể loại HÀI ĐỜI THƯỜNG Việt Nam (không đổi sang thể loại khác).
-Mỗi cảnh là MỘT đoạn video liền mạch dài ${giay} giây do AI tạo video dựng, không cắt cảnh bên trong.
+const HE_KB = (giay: number, soTu: number) => `Bạn là AGENT BIÊN KỊCH phim hoạt hình 2D, thể loại HÀI ĐỜI THƯỜNG Việt Nam (không đổi sang thể loại khác).
+Mỗi cảnh là một nhịp truyện dài khoảng ${giay} giây ở một nơi, nhân vật vừa nói vừa làm việc cụ thể (cầm, đưa, ngồi, đi, mở cửa, gọi điện...). Diễn bằng hành động, không chỉ đứng nói.
 Quy tắc:
 - Cấu trúc cả mẩu: câu mở gây tò mò → tình huống → sự cố → leo thang → cú lật bất ngờ → câu chốt. Chi tiết cài ở đầu phải được trả lại ở cuối.
+- Nếu được giao viết MỘT HỒI của phim dài: chỉ viết đúng phần việc của hồi đó theo dàn ý, nối tiếp liền mạch phần trước (giữ tên nơi chốn, đồ vật, tâm trạng), không kết thúc cả phim trừ khi là hồi cuối.
+- Nếu được giao viết MỘT HỒI của phim dài: chỉ viết đúng phần việc của hồi đó theo dàn ý, nối tiếp liền mạch phần trước (giữ tên nơi chốn, đồ vật, tâm trạng), không kết thúc cả phim trừ khi là hồi cuối.
 - bo_canh: tên ngắn của nơi diễn ra (ví dụ "Phòng khách nhà Tí"). Quay lại nơi cũ thì dùng ĐÚNG tên cũ. Cả mẩu chỉ nên có 2-4 bối cảnh.
 - nhan_vat: tên các nhân vật có mặt, đúng tên trong danh sách, tối đa 3 người một cảnh.
 - vi_tri: ai đứng bên trái, ở giữa, bên phải màn hình và quay mặt về hướng nào. Hai nhân vật đã đứng trái/phải ở một bối cảnh thì GIỮ NGUYÊN bên đó trong mọi cảnh tiếp theo ở bối cảnh ấy (không đổi chỗ, không vượt trục), trừ khi hành động bắt buộc có người đi sang.
@@ -92,15 +94,36 @@ Quy tắc:
 - Câu thoại ngắn, tự nhiên, đúng tính cách; cứ 2 cảnh có một chỗ gây cười. Biểu cảm phóng đại kiểu hoạt hình.
 - Không có chữ trong hình. ${CAM_CHUNG}`
 
-export async function agentKichBan(yChinh: string, soCanh: number, giay: number, nhanVat: NhanVatAi[]): Promise<KetQua<{ ten: string; canh: CanhAi[] }>> {
+// ---------------- Agent: DÀN Ý phim dài (chia hồi) ----------------
+const HE_DY = `Bạn là BIÊN KỊCH TRƯỞNG phim hoạt hình 2D hài đời thường Việt Nam. Từ ý chính, lập DÀN Ý cho phim có độ dài cho trước, chia thành các HỒI liên tiếp (mỗi hồi khoảng 1,5 phút).
+Cả phim có mạch: mở đầu gây tò mò → tình huống → các rắc rối leo thang (mỗi hồi một rắc rối mới hoặc nặng hơn) → cao trào → cú lật bất ngờ → kết có hậu hoặc câu chốt hài.
+Mỗi hồi: tieu_de ngắn, noi_dung 3-5 câu nói rõ chuyện gì xảy ra, ở đâu, ai làm gì, đồ vật quan trọng, và kết hồi bằng một móc câu khiến người xem muốn xem tiếp. Chi tiết cài ở hồi đầu phải được trả lại ở cuối. ${CAM_CHUNG}`
+
+export async function agentDanY(yChinh: string, phut: number, nhanVat: NhanVatAi[]): Promise<KetQua<{ ten: string; hoi: { tieuDe: string; noiDung: string }[] }>> {
   const y = cat(yChinh, 3000)
   if (y.length < 20) return { ok: false, thongBao: 'Hãy kể ý chính câu chuyện dài hơn một chút (ít nhất vài câu)' }
-  const g = giay === 10 ? 10 : 8
+  const so = Math.min(10, Math.max(2, Math.round(phut / 1.5)))
+  const r = await goiAgent<{ ten?: string; hoi?: { tieu_de?: string; noi_dung?: string }[] }>(
+    HE_DY,
+    `Độ dài phim: ${phut} phút, chia đúng ${so} hồi.\nNhân vật:\n${nhanVat.filter((n) => n.ten.trim()).map((n) => `- ${n.ten}: ${n.tinhCach || n.moTa}`).join('\n') || '(tự đặt 2-4 nhân vật)'}\n\nÝ chính:\n${y}`,
+    { type: 'OBJECT', properties: { ten: S({}), hoi: { type: 'ARRAY', items: { type: 'OBJECT', properties: { tieu_de: S({}), noi_dung: S({}) }, required: ['tieu_de', 'noi_dung'] } } }, required: ['ten', 'hoi'] },
+    0.9,
+  )
+  if (!r.ok) return r
+  const hoi = (r.kq.hoi ?? []).map((h) => ({ tieuDe: cat(h.tieu_de, 100), noiDung: cat(h.noi_dung, 900) })).filter((h) => h.noiDung)
+  if (!hoi.length) return { ok: false, thongBao: 'AI chưa lập được dàn ý, hãy thử lại' }
+  return { ok: true, ten: cat(r.kq.ten, 100), hoi }
+}
+
+export async function agentKichBan(yChinh: string, soCanh: number, giay: number, nhanVat: NhanVatAi[], nguCanh = ''): Promise<KetQua<{ ten: string; canh: CanhAi[] }>> {
+  const y = cat(yChinh, 3000)
+  if (y.length < 20) return { ok: false, thongBao: 'Hãy kể ý chính câu chuyện dài hơn một chút (ít nhất vài câu)' }
+  const g = Math.min(20, Math.max(8, Math.round(giay) || 15))
   const so = Math.min(14, Math.max(3, Math.round(soCanh) || 8))
   const ds = nhanVat.filter((n) => n.ten.trim()).map((n) => `- ${n.ten}: ${n.tinhCach || n.moTa}`).join('\n')
   const r = await goiAgent<{ ten?: string; canh?: { bo_canh?: string; nhan_vat?: string[]; vi_tri?: string; hanh_dong?: string; loi?: string; hinh?: string }[] }>(
-    HE_KB(g, g === 10 ? 24 : 18),
-    `Nhân vật:\n${ds || '(chưa có, hãy tự đặt 2-3 nhân vật)'}\n\nÝ chính câu chuyện:\n${y}\n\nViết đúng ${so} cảnh.`,
+    HE_KB(g, Math.round(g * 2.8)),
+    `Nhân vật:\n${ds || '(chưa có, hãy tự đặt 2-3 nhân vật)'}\n\nÝ chính câu chuyện:\n${y}\n\n${cat(nguCanh, 4000)}\n\nViết đúng ${so} cảnh.`,
     {
       type: 'OBJECT',
       properties: {
@@ -125,7 +148,7 @@ export async function agentKichBan(yChinh: string, soCanh: number, giay: number,
       nhanVat: (c.nhan_vat ?? []).map((x) => cat(x, 40)).filter(Boolean).slice(0, 4),
       viTri: cat(c.vi_tri, 200),
       hanhDong: cat(c.hanh_dong, 500),
-      loi: cat(c.loi, 500),
+      loi: cat(c.loi, 900),
       hinh: cat(c.hinh, 600),
     }))
     .filter((c) => c.hanhDong || c.loi)
@@ -253,7 +276,7 @@ export async function agentDaoDien(
       nhanVat: (c.nhan_vat ?? []).map((x) => cat(x, 40)).filter(Boolean).slice(0, 4),
       viTri: cat(c.vi_tri, 200),
       hanhDong: cat(c.hanh_dong, 500),
-      loi: cat(c.loi, 500),
+      loi: cat(c.loi, 900),
       hinh: cat(c.hinh, 600),
     }))
     .filter((c) => c.hanhDong || c.loi)
