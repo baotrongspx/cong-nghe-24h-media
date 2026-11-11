@@ -107,6 +107,18 @@ function cauLenhMau(p: Phim, n: NhanVat) {
   ].join('\n\n')
 }
 
+// Một câu lệnh vẽ cả dàn nhân vật trên cùng một tờ mẫu
+function cauLenhTatCaNhanVat(p: Phim) {
+  const ds = p.nhanVat.filter((n) => n.ten.trim() && n.moTa.trim())
+  return [
+    p.phongCach.trim(),
+    `Vẽ TỜ MẪU CẢ DÀN NHÂN VẬT trên nền trắng trơn, ảnh ngang 16:9. Có ${ds.length} nhân vật, xếp thành ${ds.length} cột từ trái sang phải theo đúng thứ tự dưới đây, cùng một tỉ lệ chiều cao.`,
+    'Mỗi cột vẽ một nhân vật: một dáng đứng nhìn thẳng toàn thân lớn, bên dưới là dáng nhìn nghiêng, và một hàng 3 khuôn mặt nhỏ: vui, giận, ngạc nhiên. Giữ đúng màu sắc và quần áo ở mọi hình. Các nhân vật phải khác nhau rõ ràng.',
+    `Danh sách nhân vật (trái sang phải):\n${ds.map((n, i) => `${i + 1}. ${n.ten.trim()}: ${n.moTa.trim()}`).join('\n')}`,
+    'Không viết tên hay bất kỳ chữ nào trong ảnh, không logo.',
+  ].join('\n\n')
+}
+
 function cauLenhBoiCanh(p: Phim, b: BoiCanh) {
   return [
     p.phongCach.trim(),
@@ -568,10 +580,11 @@ export default function XuongPhim({ coAi }: { coAi: boolean }) {
         <div className="flex flex-wrap items-center gap-3">
           <h2 className="text-lg font-bold">2. Nhân vật</h2>
           <NutAgent ma="nv" dang={dangAgent} tat={tatAi} chay={() => chayAgent(['nv'])} nhan="Agent nhân vật" />
+          {phim.nhanVat.some((n) => n.ten.trim() && n.moTa.trim()) && <NutChep chu={cauLenhTatCaNhanVat(phim)} nhan="Chép 1 câu lệnh vẽ tất cả nhân vật" chinh />}
         </div>
         <ol className="mt-2 list-decimal space-y-0.5 pl-5 text-xs text-phu">
-          <li>Bấm Chép câu lệnh tờ mẫu của từng nhân vật, dán vào Gemini để vẽ.</li>
-          <li>Lưu tờ mẫu ưng ý về máy. Từ đó mỗi lần làm ảnh hay video, đính kèm tờ mẫu của các nhân vật có trong cảnh.</li>
+          <li>Bấm Chép 1 câu lệnh vẽ tất cả nhân vật, dán vào Gemini: ra một tờ mẫu có cả dàn nhân vật. Nhân vật nào vẽ chưa đẹp thì chép câu lệnh riêng của người đó để vẽ lại.</li>
+          <li>Lưu tờ mẫu ưng ý về máy. Từ đó mỗi lần làm ảnh hay video, đính kèm tờ mẫu này.</li>
         </ol>
         <label className="mt-3 grid gap-1 text-sm font-medium">
           Phong cách chung (tự chèn vào mọi câu lệnh)
