@@ -416,6 +416,74 @@ export async function agentLamPhimMay(phim: { ten: string; nhanVat: { ten: strin
   return { ok: true, nhanVat, dong }
 }
 
+// ---------------- Agent: HỌA SĨ ĐẠO CỤ (Gemini vẽ đạo cụ 2D bằng dữ liệu hình học) ----------------
+export type NetVe = { k: 'r' | 'e' | 'p' | 's' | 'l'; so: number[]; mau: string; vien: boolean }
+export type DaoCuMoi = { ma: string; ten: string; nhom: string; cam: boolean; thoiDai: string; noi: string[]; hinh: NetVe[] }
+const NHOM_DO = ['noi_that', 'cong_nghe', 'van_phong', 'an_uong', 'sinh_hoat', 'lao_dong', 'giao_thong', 'lich_su', 'dong_vat', 'thuc_vat', 'moi_truong', 'dac_biet']
+const HE_DO = `Bạn là HỌA SĨ ĐẠO CỤ cho phim hoạt hình 2D: nét viền đen, màu phẳng tươi, hình đơn giản dễ thương kiểu tranh thiếu nhi, nhìn THẲNG từ phía trước (không phối cảnh).
+Bạn vẽ mỗi đạo cụ bằng danh sách NÉT hình học, nét sau đè lên nét trước:
+- k="r": chữ nhật, so=[x0,z0,x1,z1]
+- k="e": elip, so=[tâm_x, tâm_z, bán_kính_x, bán_kính_z]
+- k="p": đa giác góc cạnh, so=[x1,z1, x2,z2, ...] (ít nhất 3 điểm)
+- k="s": đa giác bo tròn mềm, so như "p"
+- k="l": nét bút dày, so=[x0,z0,x1,z1, độ_dày]
+mau = mã màu hex "#RRGGBB". vien=true có viền đen (hình chính), vien=false cho chi tiết nhỏ phía trên (vạch, chấm, bóng sáng).
+Hệ tọa độ: z hướng LÊN. Một người cao 6.7 đơn vị (bàn tay rộng 0.6).
+- Đồ cầm tay (cam=true): vẽ quanh điểm nắm (0,0), kích thước thật so với người (điện thoại cao ~0.8, cốc ~0.6, sách ~1.0).
+- Đồ đặt / nội thất / xe / cây / con vật (cam=false): đáy chạm z=0, căn giữa x=0 (ghế cao ~3, bàn ~2.2, tủ lạnh ~4.6, xe máy dài ~4, cây ~5).
+Dùng 3-12 nét, hình nhận ra ngay vật gì, có 1-2 chi tiết đặc trưng. Không vẽ chữ.
+ma: mã không dấu viết thường nối "_" (vd "xe_xich_lo"). ten: tên tiếng Việt có dấu. nhom: một trong ${NHOM_DO.join(', ')}.
+thoi_dai: "hien_dai" (đồ chỉ có thời nay), "co_xua" (đồ chỉ có thời xưa) hoặc "moi_thoi" (dùng được mọi thời). noi: các nơi hay có món này, chọn trong: nha, chung_cu, quan_ca_phe, van_phong, truong, duong, cong_vien, cho.`
+
+export async function agentVeDaoCu(moTa: string[]): Promise<KetQua<{ daoCu: DaoCuMoi[] }>> {
+  const ds = moTa.map((m) => cat(m, 160)).filter(Boolean).slice(0, 8)
+  if (!ds.length) return { ok: false, thongBao: 'Hãy nhập tên đạo cụ cần vẽ' }
+  const r = await goiAgent<{ dao_cu?: { ma?: string; ten?: string; nhom?: string; cam?: boolean; thoi_dai?: string; noi?: string[]; hinh?: { k?: string; so?: number[]; mau?: string; vien?: boolean }[] }[] }>(
+    HE_DO,
+    `Vẽ các đạo cụ sau (mỗi dòng một món):\n${ds.map((m) => `- ${m}`).join('\n')}`,
+    {
+      type: 'OBJECT',
+      properties: {
+        dao_cu: {
+          type: 'ARRAY',
+          items: {
+            type: 'OBJECT',
+            properties: {
+              ma: S({}), ten: S({}), nhom: S({ enum: NHOM_DO }), cam: { type: 'BOOLEAN' }, thoi_dai: S({ enum: ['hien_dai', 'co_xua', 'moi_thoi'] }),
+              noi: { type: 'ARRAY', items: S({}) },
+              hinh: { type: 'ARRAY', items: { type: 'OBJECT', properties: { k: S({ enum: ['r', 'e', 'p', 's', 'l'] }), so: { type: 'ARRAY', items: { type: 'NUMBER' } }, mau: S({}), vien: { type: 'BOOLEAN' } }, required: ['k', 'so', 'mau', 'vien'] } },
+            },
+            required: ['ma', 'ten', 'nhom', 'cam', 'thoi_dai', 'noi', 'hinh'],
+          },
+        },
+      },
+      required: ['dao_cu'],
+    },
+    0.7,
+  )
+  if (!r.ok) return r
+  const CAN = { r: 4, e: 4, l: 5 } as Record<string, number>
+  const daoCu = (r.kq.dao_cu ?? []).flatMap((d) => {
+    const hinh = (d.hinh ?? []).flatMap((n) => {
+      const k = String(n.k) as NetVe['k']
+      const so = (n.so ?? []).map(Number).filter((x) => Number.isFinite(x) && Math.abs(x) < 40).map((x) => Math.round(x * 100) / 100)
+      const du = k in CAN ? so.length === CAN[k] : (k === 'p' || k === 's') && so.length >= 6 && so.length % 2 === 0
+      const mau = /^#[0-9a-f]{6}$/i.test(String(n.mau)) ? String(n.mau).toUpperCase() : ''
+      return ['r', 'e', 'p', 's', 'l'].includes(k) && du && mau ? [{ k, so, mau, vien: !!n.vien }] : []
+    })
+    const ma = cat(d.ma, 40).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/g, 'd').replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '')
+    if (!ma || hinh.length < 2) return []
+    return [{
+      ma, ten: cat(d.ten, 60) || ma, nhom: NHOM_DO.includes(String(d.nhom)) ? String(d.nhom) : 'dac_biet', cam: !!d.cam,
+      thoiDai: ['hien_dai', 'co_xua', 'moi_thoi'].includes(String(d.thoi_dai)) ? String(d.thoi_dai) : 'moi_thoi',
+      noi: (d.noi ?? []).map((x) => cat(x, 20)).filter((x) => ['nha', 'chung_cu', 'quan_ca_phe', 'van_phong', 'truong', 'duong', 'cong_vien', 'cho'].includes(x)),
+      hinh,
+    }]
+  })
+  if (!daoCu.length) return { ok: false, thongBao: 'AI chưa vẽ được, hãy bấm thử lại' }
+  return { ok: true, daoCu }
+}
+
 // ---------------- Agent 4: câu lệnh video ----------------
 const HE_VD = (giay: number) => `Bạn là AGENT ĐẠO DIỄN VIDEO. Với từng cảnh, viết diễn biến để AI tạo video (như Veo trong Gemini) dựng một đoạn ${giay} giây liền mạch, bắt đầu từ ảnh khung đầu của cảnh.
 Với mỗi cảnh (giữ đúng số "so"):

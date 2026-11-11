@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { KIEU, giaiMa, tachPhuDe, veChu } from '@/lib/dungVideo'
 import { GIONG } from '@/lib/giongDoc'
 import { agentBoiCanh, agentDaoDien, agentKichBan, agentLamPhimMay, agentNhanVat, agentVideo, docDoanPhim, type DanhGia, type VideoAi } from './actions'
+import XuongDaoCu from './XuongDaoCu'
 
 // Xưởng phim hoạt hình kể chuyện, có đội 4 agent:
 // 1) nhân vật (câu lệnh tờ mẫu cho Gemini)  2) kịch bản  3) bối cảnh (câu lệnh vẽ nền trống)  4) câu lệnh video 8/10 giây cho Gemini (Veo).
@@ -914,6 +915,7 @@ export default function XuongPhim({ coAi }: { coAi: boolean }) {
       </section>
 
       <OLamPhimMay phim={phim} tat={tatAi} />
+      <XuongDaoCu tat={tatAi} />
 
       {/* 6. Dựng nhanh bằng ảnh tĩnh */}
       <section className={KHUNG}>
