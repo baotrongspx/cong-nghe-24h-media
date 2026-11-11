@@ -29,10 +29,10 @@ const CO_DAU = /[ăâđêôơưáàảãạéèẻẽẹíìỉĩịóòỏõọ
 const cat = (s: unknown, n: number) => String(s ?? '').trim().slice(0, n)
 
 // Gọi một agent: kiểm tra khóa trang, gọi Gemini ép JSON, bắt lỗi chữ không dấu
-async function goiAgent<T>(heThong: string, noiDung: string, schema: object, nhiet: number): Promise<{ ok: true; kq: T } | { ok: false; thongBao: string }> {
+async function goiAgent<T>(heThong: string, noiDung: string, schema: object, nhiet: number, moHinh: string[] = []): Promise<{ ok: true; kq: T } | { ok: false; thongBao: string }> {
   if (!(await daMoKhoa())) return { ok: false, thongBao: CHUA_MO }
   try {
-    const chu = await goiGeminiJson(heThong, [{ role: 'user', parts: [{ text: noiDung }] }], schema, nhiet, 55_000)
+    const chu = await goiGeminiJson(heThong, [{ role: 'user', parts: [{ text: noiDung }] }], schema, nhiet, 55_000, moHinh)
     if (!CO_DAU.test(chu)) return { ok: false, thongBao: 'AI trả về chữ không dấu, hãy bấm thử lại' }
     return { ok: true, kq: JSON.parse(chu) as T }
   } catch (e) {
@@ -420,23 +420,49 @@ export async function agentLamPhimMay(phim: { ten: string; nhanVat: { ten: strin
 export type NetVe = { k: 'r' | 'e' | 'p' | 's' | 'l'; so: number[]; mau: string; vien: boolean }
 export type DaoCuMoi = { ma: string; ten: string; nhom: string; cam: boolean; thoiDai: string; noi: string[]; hinh: NetVe[] }
 const NHOM_DO = ['noi_that', 'cong_nghe', 'van_phong', 'an_uong', 'sinh_hoat', 'lao_dong', 'giao_thong', 'lich_su', 'dong_vat', 'thuc_vat', 'moi_truong', 'dac_biet']
-const HE_DO = `Bạn là HỌA SĨ ĐẠO CỤ cho phim hoạt hình 2D: nét viền đen, màu phẳng tươi, hình đơn giản dễ thương kiểu tranh thiếu nhi, nhìn THẲNG từ phía trước (không phối cảnh).
+// Mô hình vẽ: mạnh hơn mô hình viết chữ (đặt GEMINI_MODEL_VE trên Vercel để chọn khác)
+const MO_HINH_VE = [process.env.GEMINI_MODEL_VE?.trim() ?? '', 'gemini-3.5-flash', 'gemini-3-flash', 'gemini-2.5-flash']
+const VI_DU_DO = JSON.stringify({
+  ma: 'coc_ca_phe_sua', ten: 'Cốc cà phê sữa', nhom: 'an_uong', cam: true, thoi_dai: 'hien_dai', noi: ['quan_ca_phe'],
+  hinh: [
+    { k: 'e', so: [0.34, 0.02, 0.17, 0.2], mau: '#F4F1EA', vien: true },
+    { k: 's', so: [-0.34, 0.38, 0.3, 0.38, 0.26, -0.36, -0.3, -0.36], mau: '#F4F1EA', vien: true },
+    { k: 's', so: [0.12, 0.36, 0.3, 0.36, 0.26, -0.34, 0.08, -0.34], mau: '#D9D3C7', vien: false },
+    { k: 'e', so: [-0.02, 0.37, 0.31, 0.06], mau: '#8A5A3B', vien: true },
+    { k: 'e', so: [-0.08, 0.38, 0.12, 0.025], mau: '#C49A72', vien: false },
+    { k: 'r', so: [-0.3, -0.05, 0.27, 0.05], mau: '#C8553D', vien: false },
+    { k: 'l', so: [-0.22, 0.25, -0.22, -0.2, 0.03], mau: '#FFFFFF', vien: false },
+    { k: 's', so: [-0.08, 0.5, -0.02, 0.62, -0.1, 0.74, -0.04, 0.84], mau: '#E3E3E3', vien: false },
+  ],
+})
+const HE_DO = `Bạn là HỌA SĨ ĐẠO CỤ chính của một studio hoạt hình 2D chuyên nghiệp. Phong cách: hoạt hình 2D phẳng hiện đại, nét viền đen gọn, màu phẳng hài hòa có SẮC ĐỘ (không dùng màu thuần chói như #FF0000, #00FF00), hình khối tròn trịa dễ thương, nhìn THẲNG từ phía trước.
 Bạn vẽ mỗi đạo cụ bằng danh sách NÉT hình học, nét sau đè lên nét trước:
 - k="r": chữ nhật, so=[x0,z0,x1,z1]
 - k="e": elip, so=[tâm_x, tâm_z, bán_kính_x, bán_kính_z]
 - k="p": đa giác góc cạnh, so=[x1,z1, x2,z2, ...] (ít nhất 3 điểm)
-- k="s": đa giác bo tròn mềm, so như "p"
-- k="l": nét bút dày, so=[x0,z0,x1,z1, độ_dày]
-mau = mã màu hex "#RRGGBB". vien=true có viền đen (hình chính), vien=false cho chi tiết nhỏ phía trên (vạch, chấm, bóng sáng).
-Hệ tọa độ: z hướng LÊN. Một người cao 6.7 đơn vị (bàn tay rộng 0.6).
-- Đồ cầm tay (cam=true): vẽ quanh điểm nắm (0,0), kích thước thật so với người (điện thoại cao ~0.8, cốc ~0.6, sách ~1.0).
-- Đồ đặt / nội thất / xe / cây / con vật (cam=false): đáy chạm z=0, căn giữa x=0 (ghế cao ~3, bàn ~2.2, tủ lạnh ~4.6, xe máy dài ~4, cây ~5).
-Dùng 3-12 nét, hình nhận ra ngay vật gì, có 1-2 chi tiết đặc trưng. Không vẽ chữ.
+- k="s": đa giác bo tròn mềm, so như "p" (dùng cho hình hữu cơ: thân xe, lá, thú, túi, gối)
+- k="l": nét bút dày đầu tròn, so=[x0,z0,x1,z1, độ_dày]
+mau = mã hex "#RRGGBB". vien=true: có viền đen (khối chính). vien=false: lớp phủ không viền (bóng, sáng, hoa văn, chi tiết nhỏ).
+
+KỸ THUẬT VẼ ĐẸP (bắt buộc):
+1. Dựng KHỐI CHÍNH trước (vien=true), mỗi bộ phận lớn một nét riêng (thân, nắp, chân, tay cầm, bánh xe...).
+2. Đổ BÓNG: ánh sáng chiếu từ TRÊN-TRÁI, nên phủ một mảng tối hơn màu nền khoảng 20% ở phía PHẢI hoặc phía DƯỚI mỗi khối lớn (vien=false), nằm gọn bên trong khối.
+3. Điểm SÁNG: một vệt hoặc chấm sáng hơn khoảng 25% ở phía TRÊN-TRÁI các khối bóng bẩy (kính, kim loại, nhựa, quả cây).
+4. CHI TIẾT ĐẶC TRƯNG: 3-8 chi tiết nhỏ làm vật thật hơn (nút bấm, đường may, vân gỗ, ốc vít, nhãn dán, cánh hoa, mắt mũi con vật, khe tản nhiệt, hoa văn).
+5. Tổng 12-30 nét. Bảng màu 3-6 màu chính hài hòa cùng các sắc độ sáng/tối của chúng.
+6. Tỷ lệ đúng vật thật so với người cao 6.7 đơn vị (bàn tay rộng 0.6): điện thoại cao ~0.8, cốc ~0.7, sách ~1.0, ghế ~3, bàn ~2.2, tủ lạnh ~4.6, xe máy dài ~4, ô tô dài ~7, cây ~5-6, con mèo dài ~1.6, con trâu dài ~5.
+7. Đồ cầm tay (cam=true): vẽ quanh điểm nắm (0,0). Đồ đặt / nội thất / xe / cây / con vật (cam=false): đáy chạm z=0, căn giữa x=0. Hệ tọa độ: z hướng LÊN.
+8. Không vẽ chữ. Con vật nhìn nghiêng sang phải, có mắt to tròn dễ thương.
+9. TỰ KIỂM TRA trước khi trả lời: hình có nhận ra ngay là vật gì không, các nét có khớp nhau không bị hở, bóng và sáng đã đúng phía chưa; nếu chưa thì sửa lại.
+
+VÍ DỤ một đạo cụ đạt chuẩn (cốc cà phê sữa, cầm tay):
+${VI_DU_DO}
+
 ma: mã không dấu viết thường nối "_" (vd "xe_xich_lo"). ten: tên tiếng Việt có dấu. nhom: một trong ${NHOM_DO.join(', ')}.
-thoi_dai: "hien_dai" (đồ chỉ có thời nay), "co_xua" (đồ chỉ có thời xưa) hoặc "moi_thoi" (dùng được mọi thời). noi: các nơi hay có món này, chọn trong: nha, chung_cu, quan_ca_phe, van_phong, truong, duong, cong_vien, cho.`
+thoi_dai: "hien_dai" (đồ chỉ có thời nay), "co_xua" (đồ chỉ có thời xưa) hoặc "moi_thoi". noi: các nơi hay có món này, chọn trong: nha, chung_cu, quan_ca_phe, van_phong, truong, duong, cong_vien, cho.`
 
 export async function agentVeDaoCu(moTa: string[]): Promise<KetQua<{ daoCu: DaoCuMoi[] }>> {
-  const ds = moTa.map((m) => cat(m, 160)).filter(Boolean).slice(0, 8)
+  const ds = moTa.map((m) => cat(m, 220)).filter(Boolean).slice(0, 4)
   if (!ds.length) return { ok: false, thongBao: 'Hãy nhập tên đạo cụ cần vẽ' }
   const r = await goiAgent<{ dao_cu?: { ma?: string; ten?: string; nhom?: string; cam?: boolean; thoi_dai?: string; noi?: string[]; hinh?: { k?: string; so?: number[]; mau?: string; vien?: boolean }[] }[] }>(
     HE_DO,
@@ -459,7 +485,8 @@ export async function agentVeDaoCu(moTa: string[]): Promise<KetQua<{ daoCu: DaoC
       },
       required: ['dao_cu'],
     },
-    0.7,
+    0.6,
+    MO_HINH_VE,
   )
   if (!r.ok) return r
   const CAN = { r: 4, e: 4, l: 5 } as Record<string, number>
@@ -472,7 +499,7 @@ export async function agentVeDaoCu(moTa: string[]): Promise<KetQua<{ daoCu: DaoC
       return ['r', 'e', 'p', 's', 'l'].includes(k) && du && mau ? [{ k, so, mau, vien: !!n.vien }] : []
     })
     const ma = cat(d.ma, 40).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/g, 'd').replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '')
-    if (!ma || hinh.length < 2) return []
+    if (!ma || hinh.length < 3) return []
     return [{
       ma, ten: cat(d.ten, 60) || ma, nhom: NHOM_DO.includes(String(d.nhom)) ? String(d.nhom) : 'dac_biet', cam: !!d.cam,
       thoiDai: ['hien_dai', 'co_xua', 'moi_thoi'].includes(String(d.thoi_dai)) ? String(d.thoi_dai) : 'moi_thoi',

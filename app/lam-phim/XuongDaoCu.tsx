@@ -103,9 +103,9 @@ export default function XuongDaoCu({ tat, phim }: { tat: boolean; phim: PhimDoc 
     if (!mon.length) return setLoi('Hãy gõ tên các đạo cụ, cách nhau bằng dấu phẩy hoặc xuống dòng')
     setLoi('')
     let xong = 0
-    for (let i = 0; i < mon.length; i += 6) {
-      setDang(`Gemini đang vẽ ${Math.min(i + 6, mon.length)}/${mon.length}…`)
-      const r = await agentVeDaoCu(mon.slice(i, i + 6))
+    for (let i = 0; i < mon.length; i += 4) {
+      setDang(`Gemini đang vẽ ${Math.min(i + 4, mon.length)}/${mon.length}…`)
+      const r = await agentVeDaoCu(mon.slice(i, i + 4))
       if (!r.ok) {
         setLoi(r.thongBao)
         continue
@@ -121,7 +121,7 @@ export default function XuongDaoCu({ tat, phim }: { tat: boolean; phim: PhimDoc 
   async function veLai(i: number) {
     const d = ds[i]
     setDang(`Đang vẽ lại ${d.ten}…`)
-    const r = await agentVeDaoCu([`${d.ten} (vẽ lại đẹp hơn, rõ hình hơn)`])
+    const r = await agentVeDaoCu([`${d.ten} (vẽ lại đẹp và chi tiết hơn: thêm bóng đổ, điểm sáng, chi tiết đặc trưng)`])
     if (r.ok && r.daoCu[0]) setDs((x) => x.map((y, j) => (j === i ? { ...r.daoCu[0], ma: d.ma, chon: true } : y)))
     else if (!r.ok) setLoi(r.thongBao)
     setDang('')
