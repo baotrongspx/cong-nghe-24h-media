@@ -80,7 +80,7 @@ export async function agentNhanVat(yChinh: string, phongCach: string, daCo: Nhan
 
 // ---------------- Agent 2: kịch bản ----------------
 const HE_KB = (giay: number, soTu: number) => `Bạn là AGENT BIÊN KỊCH phim hoạt hình 2D, thể loại HÀI ĐỜI THƯỜNG Việt Nam (không đổi sang thể loại khác).
-Mỗi cảnh là một nhịp truyện dài khoảng ${giay} giây ở một nơi, nhân vật vừa nói vừa làm việc cụ thể (cầm, đưa, ngồi, đi, mở cửa, gọi điện...). Diễn bằng hành động, không chỉ đứng nói.
+Mỗi cảnh là một nhịp truyện ở MỘT nơi, MỘT thời điểm (đổi nơi hoặc nhảy thời gian thì sang cảnh mới); cảnh dài ngắn tùy nội dung cần, nhân vật vừa nói vừa làm việc cụ thể (cầm, đưa, ngồi, đi, mở cửa, gọi điện...). Diễn bằng hành động, không chỉ đứng nói.
 Quy tắc:
 - Cấu trúc cả mẩu: câu mở gây tò mò → tình huống → sự cố → leo thang → cú lật bất ngờ → câu chốt. Chi tiết cài ở đầu phải được trả lại ở cuối.
 - Nếu có TƯ LIỆU (chuyển thể từ bách khoa toàn thư): KỂ BẰNG THOẠI giữa các nhân vật — nhân vật chính nói nhiều nhất, nhân vật phụ và các nhân vật khác cùng tham gia đối đáp; mỗi cảnh có ít nhất 2 người nói; người dẫn (Người kể) chỉ nói câu ngắn để nối thời gian, địa điểm. Sự kiện, năm tháng, con số, tên riêng phải đúng tư liệu; được thêm lời thoại, cảm xúc và chi tiết đời thường hợp lý.
@@ -89,8 +89,8 @@ Quy tắc:
 - bo_canh: tên ngắn của nơi diễn ra (ví dụ "Phòng khách nhà Tí"). Quay lại nơi cũ thì dùng ĐÚNG tên cũ. Cả mẩu chỉ nên có 2-4 bối cảnh.
 - nhan_vat: tên các nhân vật có mặt, đúng tên trong danh sách, tối đa 3 người một cảnh.
 - vi_tri: ai đứng bên trái, ở giữa, bên phải màn hình và quay mặt về hướng nào. Hai nhân vật đã đứng trái/phải ở một bối cảnh thì GIỮ NGUYÊN bên đó trong mọi cảnh tiếp theo ở bối cảnh ấy (không đổi chỗ, không vượt trục), trừ khi hành động bắt buộc có người đi sang.
-- hanh_dong: chuyện xảy ra trong ${giay} giây, chỉ 1-2 hành động cụ thể nhìn thấy được.
-- loi: lời thoại trong cảnh, mỗi câu một dòng dạng "Tên: câu nói". Tổng tối đa ${soTu} từ để nói kịp trong ${giay} giây. Để trống nếu cảnh chỉ có hành động.
+- hanh_dong: những việc nhân vật làm trong cảnh, cụ thể, nhìn thấy được.
+- loi: lời thoại trong cảnh, mỗi câu một dòng dạng "Tên: câu nói". Cảnh dài ngắn tùy nội dung (đọc khoảng 3 chữ mỗi giây), tối đa khoảng ${soTu} từ một cảnh. Để trống nếu cảnh chỉ có hành động.
 - hinh: khung hình ĐẦU TIÊN của cảnh để vẽ ảnh tĩnh: ai đứng đâu (trái, giữa, phải), tư thế, biểu cảm, cỡ cảnh. Gọi nhân vật bằng tên, không tả lại ngoại hình hay quần áo.
 - Câu thoại ngắn, tự nhiên, đúng tính cách; cứ 2 cảnh có một chỗ gây cười. Biểu cảm phóng đại kiểu hoạt hình.
 - Không có chữ trong hình. ${CAM_CHUNG}`
@@ -101,18 +101,20 @@ Cả phim có mạch: mở đầu gây tò mò → tình huống → các rắc 
 Nếu có TƯ LIỆU (cốt truyện thật từ bách khoa toàn thư): các hồi đi đúng các sự kiện thật theo thứ tự thời gian, không bịa sự kiện, năm tháng, con số; chỉ được thêm tình huống đời thường và xung đột nhỏ để kịch tính hóa, và nêu rõ nhân vật nào tham gia mỗi hồi.
 Mỗi hồi: tieu_de ngắn, noi_dung 3-5 câu nói rõ chuyện gì xảy ra, ở đâu, ai làm gì, đồ vật quan trọng, và kết hồi bằng một móc câu khiến người xem muốn xem tiếp. Chi tiết cài ở hồi đầu phải được trả lại ở cuối. ${CAM_CHUNG}`
 
-export async function agentDanY(yChinh: string, phut: number, nhanVat: NhanVatAi[], tuLieu = ''): Promise<KetQua<{ ten: string; hoi: { tieuDe: string; noiDung: string }[] }>> {
+export async function agentDanY(yChinh: string, phut: number, nhanVat: NhanVatAi[], tuLieu = ''): Promise<KetQua<{ ten: string; hoi: { tieuDe: string; noiDung: string; giay: number }[] }>> {
   const y = cat(yChinh, 3000)
   if (y.length < 20) return { ok: false, thongBao: 'Hãy kể ý chính câu chuyện dài hơn một chút (ít nhất vài câu)' }
-  const so = Math.min(10, Math.max(2, Math.round(phut / 1.5)))
-  const r = await goiAgent<{ ten?: string; hoi?: { tieu_de?: string; noi_dung?: string }[] }>(
+  const tong = Math.round(phut * 60)
+  const r = await goiAgent<{ ten?: string; hoi?: { tieu_de?: string; noi_dung?: string; thoi_luong_giay?: number }[] }>(
     HE_DY,
-    `Độ dài phim: ${phut} phút, chia đúng ${so} hồi.\nNhân vật:\n${nhanVat.filter((n) => n.ten.trim()).map((n) => `- ${n.ten}: ${n.tinhCach || n.moTa}`).join('\n') || '(tự đặt 2-4 nhân vật)'}\n\nÝ chính:\n${y}${tuLieu ? `\n\nTƯ LIỆU:\n${cat(tuLieu, 12000)}` : ''}`,
-    { type: 'OBJECT', properties: { ten: S({}), hoi: { type: 'ARRAY', items: { type: 'OBJECT', properties: { tieu_de: S({}), noi_dung: S({}) }, required: ['tieu_de', 'noi_dung'] } } }, required: ['ten', 'hoi'] },
+    `Độ dài phim: ${phut} phút (${tong} giây). TỰ CHIA số hồi theo mạch truyện (thường 2-12 hồi, mỗi hồi một chặng sự việc trọn vẹn), và phân thời lượng cho từng hồi theo độ quan trọng: hồi cao trào dài hơn, hồi chuyển tiếp ngắn. Tổng thời lượng các hồi = ${tong} giây.\nNhân vật:\n${nhanVat.filter((n) => n.ten.trim()).map((n) => `- ${n.ten}: ${n.tinhCach || n.moTa}`).join('\n') || '(tự đặt 2-4 nhân vật)'}\n\nÝ chính:\n${y}${tuLieu ? `\n\nTƯ LIỆU:\n${cat(tuLieu, 12000)}` : ''}`,
+    { type: 'OBJECT', properties: { ten: S({}), hoi: { type: 'ARRAY', items: { type: 'OBJECT', properties: { tieu_de: S({}), noi_dung: S({}), thoi_luong_giay: { type: 'INTEGER' } }, required: ['tieu_de', 'noi_dung', 'thoi_luong_giay'] } } }, required: ['ten', 'hoi'] },
     0.9,
   )
   if (!r.ok) return r
-  const hoi = (r.kq.hoi ?? []).map((h) => ({ tieuDe: cat(h.tieu_de, 100), noiDung: cat(h.noi_dung, 900) })).filter((h) => h.noiDung)
+  const tho = (r.kq.hoi ?? []).map((h) => ({ tieuDe: cat(h.tieu_de, 100), noiDung: cat(h.noi_dung, 900), giay: Math.max(20, Number(h.thoi_luong_giay) || 0) })).filter((h) => h.noiDung).slice(0, 14)
+  const cong = tho.reduce((s, h) => s + h.giay, 0) || 1
+  const hoi = tho.map((h) => ({ ...h, giay: Math.round((h.giay * tong) / cong) }))  // chuẩn lại cho đúng tổng độ dài
   if (!hoi.length) return { ok: false, thongBao: 'AI chưa lập được dàn ý, hãy thử lại' }
   return { ok: true, ten: cat(r.kq.ten, 100), hoi }
 }
@@ -121,11 +123,11 @@ export async function agentKichBan(yChinh: string, soCanh: number, giay: number,
   const y = cat(yChinh, 3000)
   if (y.length < 20) return { ok: false, thongBao: 'Hãy kể ý chính câu chuyện dài hơn một chút (ít nhất vài câu)' }
   const g = Math.min(20, Math.max(8, Math.round(giay) || 15))
-  const so = Math.min(14, Math.max(3, Math.round(soCanh) || 8))
+  const giayMuc = Math.max(20, Math.round(soCanh * g))
   const ds = nhanVat.filter((n) => n.ten.trim()).map((n) => `- ${n.ten}: ${n.tinhCach || n.moTa}`).join('\n')
   const r = await goiAgent<{ ten?: string; canh?: { bo_canh?: string; nhan_vat?: string[]; vi_tri?: string; hanh_dong?: string; loi?: string; hinh?: string }[] }>(
-    HE_KB(g, Math.round(g * 2.8)),
-    `Nhân vật:\n${ds || '(chưa có, hãy tự đặt 2-3 nhân vật)'}\n\nÝ chính câu chuyện:\n${y}\n\n${cat(nguCanh, 9000)}\n\nViết đúng ${so} cảnh.`,
+    HE_KB(g, 140),
+    `Nhân vật:\n${ds || '(chưa có, hãy tự đặt 2-3 nhân vật)'}\n\nÝ chính câu chuyện:\n${y}\n\n${cat(nguCanh, 9000)}\n\nThời lượng cần viết: khoảng ${giayMuc} giây (khoảng ${Math.round(giayMuc * 2.6)} chữ thoại). TỰ QUYẾT số cảnh cho hợp nội dung, không chia đều máy móc.`,
     {
       type: 'OBJECT',
       properties: {
@@ -154,7 +156,7 @@ export async function agentKichBan(yChinh: string, soCanh: number, giay: number,
       hinh: cat(c.hinh, 600),
     }))
     .filter((c) => c.hanhDong || c.loi)
-    .slice(0, 20)
+    .slice(0, 30)
   if (!canh.length) return { ok: false, thongBao: 'Agent chưa viết được cảnh nào, hãy thử lại' }
   return { ok: true, ten: cat(r.kq.ten, 100), canh }
 }

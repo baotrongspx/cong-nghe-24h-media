@@ -419,10 +419,9 @@ export default function XuongPhim({ coAi }: { coAi: boolean }) {
     if (maAgent === 'kb') {
       const nv = p.nhanVat.map((n) => ({ ten: n.ten, moTa: n.moTa, tinhCach: n.tinhCach ?? '', giong: n.giong ?? '' }))
       const phut = p.phut ?? 2
-      const tongCanh = Math.max(4, Math.round((phut * 60) / 15))
       const tl = p.tuLieu ? `TƯ LIỆU THẬT (${p.tuLieu.tieuDe}) — bám đúng sự kiện, biên đạo thành phim có thoại:\n${p.tuLieu.noiDung.slice(0, 5000)}` : ''
       if (phut <= 2) {
-        const r = await agentKichBan(p.yChinh, tongCanh, 15, nv, tl)
+        const r = await agentKichBan(p.yChinh, (phut * 60) / 15, 15, nv, tl)
         if (!r.ok) throw new Error(r.thongBao)
         boAnh(p.canh.map((c) => c.id))
         return { ...p, ten: r.ten || p.ten, canh: moi(r.canh), danhGia: null, banSua: null }
@@ -430,15 +429,14 @@ export default function XuongPhim({ coAi }: { coAi: boolean }) {
       setTinAgent({ loai: 'ok', chu: `Đang lập dàn ý phim ${phut} phút…` })
       const dy = await agentDanY(p.yChinh, phut, nv, p.tuLieu?.noiDung ?? '')
       if (!dy.ok) throw new Error(dy.thongBao)
-      const danY = dy.hoi.map((h, i) => `Hồi ${i + 1} - ${h.tieuDe}: ${h.noiDung}`).join('\n')
+      const danY = dy.hoi.map((h, i) => `Hồi ${i + 1} - ${h.tieuDe} (~${h.giay} giây): ${h.noiDung}`).join('\n')
       const moiCanh: Canh[] = []
-      const moiHoi = Math.max(3, Math.round(tongCanh / dy.hoi.length))
       for (let i = 0; i < dy.hoi.length; i++) {
         setTinAgent({ loai: 'ok', chu: `Đang viết hồi ${i + 1}/${dy.hoi.length}: ${dy.hoi[i].tieuDe}…` })
         const truoc = moiCanh.slice(-3).map((c) => `[${c.boiCanh}] ${c.hanhDong} | ${c.loi.replace(/\n/g, ' / ')}`).join('\n')
         const nguCanh = `DÀN Ý CẢ PHIM (${phut} phút):\n${danY}\n\nBẠN ĐANG VIẾT HỒI ${i + 1}/${dy.hoi.length}: ${dy.hoi[i].tieuDe} — ${dy.hoi[i].noiDung}${i === dy.hoi.length - 1 ? '\nĐây là HỒI CUỐI: khép lại câu chuyện bằng cú lật và câu chốt.' : ''}${truoc ? `\n\nCÁC CẢNH NGAY TRƯỚC (nối tiếp liền mạch):\n${truoc}` : ''}${tl ? `\n\n${tl}` : ''}`
-        let r = await agentKichBan(p.yChinh, moiHoi, 15, nv, nguCanh)
-        if (!r.ok) r = await agentKichBan(p.yChinh, moiHoi, 15, nv, nguCanh)
+        let r = await agentKichBan(p.yChinh, dy.hoi[i].giay / 15, 15, nv, nguCanh)
+        if (!r.ok) r = await agentKichBan(p.yChinh, dy.hoi[i].giay / 15, 15, nv, nguCanh)
         if (!r.ok) throw new Error(`Hồi ${i + 1}: ${r.thongBao}`)
         moiCanh.push(...moi(r.canh))
       }
@@ -558,7 +556,7 @@ export default function XuongPhim({ coAi }: { coAi: boolean }) {
               ))}
             </div>
             <p className="mt-2 text-xs text-phu">
-              Khoảng {Math.max(4, Math.round(((phim.phut ?? 2) * 60) / 15))} cảnh.{(phim.phut ?? 2) > 2 ? ` Phim dài: AI lập dàn ý ${Math.min(10, Math.max(2, Math.round((phim.phut ?? 2) / 1.5)))} hồi rồi viết từng hồi nối tiếp.` : ''} Máy nhà xuất phim mất khoảng {Math.round((phim.phut ?? 2) * 6)} phút.
+              AI tự chia hồi và cảnh theo mạch truyện, không ép số cảnh.{(phim.phut ?? 2) > 2 ? ' Phim dài: AI lập dàn ý chia hồi (hồi quan trọng dài hơn) rồi viết từng hồi nối tiếp.' : ''} Máy nhà xuất phim mất khoảng {Math.round((phim.phut ?? 2) * 6)} phút.
             </p>
           </div>
         </div>
