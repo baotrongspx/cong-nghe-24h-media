@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { goiGeminiJson } from '@/lib/gemini'
 import { GIONG, docThanhGiong } from '@/lib/giongNoi'
 import { daMoKhoa, moKhoa } from '@/lib/khoa'
-import { ANH_SANG_2D, CAM_XUC_2D, CHUYEN_CANH_2D, DANG_NGUOI_2D, PHU_KIEN_2D, DAO_CU_2D, DS_KHU_2D, HANH_DONG_2D, HIEU_UNG_2D, KHU_VUC_2D, MAY_QUAY_2D, THOI_TIET_2D } from './danhMuc2d'
+import { ANH_SANG_2D, CAM_XUC_2D, CHUYEN_CANH_2D, DANG_NGUOI_2D, PHU_KIEN_2D, DAO_CU_2D, DS_KHU_2D, HANH_DONG_2D, HIEU_UNG_2D, KHU_CO_XUA_2D, KHU_VUC_2D, MAY_QUAY_2D, THOI_TIET_2D } from './danhMuc2d'
 
 const CHUA_MO = 'Trang đang khóa, hãy tải lại trang và nhập mật khẩu'
 
@@ -370,7 +370,12 @@ Quy tắc dàn dựng:
 6. Góc máy có chủ đích: mở đầu mỗi khu vực bằng toan hoặc rat_rong; đối thoại xen trung, can, qua_vai; khoảnh khắc sốc dùng dac_ta hoặc day_vao; nhân vật yếu thế goc_cao, oai vệ goc_thap; người chạy dùng lia; kết phim keo_ra.
 7. Hiệu ứng chỉ dùng khi đúng cảm xúc (mồ hôi khi bối rối, tim khi yêu, khói khi tức...). Khoảng một nửa số dòng có hành động, không lạm dụng.
 8. Dòng chỉ có hành động, không lời: loi = "" và dien = người làm.
-15. ĐÚNG THỜI ĐẠI: truyện cổ tích, truyền thuyết, lịch sử trước thời hiện đại thì TUYỆT ĐỐI không dùng đồ hiện đại (xe máy, ô tô, xe đạp, điện thoại, micro, máy tính, laptop, tivi, sách in, hồ sơ, ly trà sữa...) và không đặt cảnh ở văn phòng, phòng họp, quán cà phê, chung cư, phố có ô tô; chọn nơi hợp nhất trong danh mục (bãi cỏ, hồ nước, chợ, hẻm làng, phòng ngủ đơn sơ) và hành động bằng tay không (chỉ, vẫy, gật, chào, đẩy, nhảy, chạy...).
+15. ĐÚNG THỜI ĐẠI: truyện cổ tích, truyền thuyết, lịch sử trước thời hiện đại thì TUYỆT ĐỐI không dùng đồ hiện đại (xe máy, ô tô, xe đạp, điện thoại, micro, máy tính, laptop, tivi, sách in, hồ sơ, ly trà sữa...) và không đặt cảnh ở văn phòng, phòng họp, quán cà phê, chung cư, phố có ô tô; CHỈ chọn khu vực thời xưa: ${KHU_CO_XUA_2D.join(', ')}; chỉ dùng đồ có thoi_dai co_xua hoặc moi_thoi.
+16. PHỤC TRANG thời xưa (ghi vào phu_kien): vua = mu_mien + ao_bao (+ rau); quan, sứ giả = khan_dong + ao_bao; lính, tráng sĩ, giặc = non_sat + ao_giap; đàn ông dân thường = khan_dong hoặc bui_toc; phụ nữ = khan_mo_qua; cụ ông, đạo sĩ = rau_dai + bui_toc. Màu áo nâu, chàm, đen, vàng (vua); không mặc màu áo phông hiện đại.
+17. GIỚI TÍNH: mẹ, bà, vợ, chị, cô, nàng, công chúa, hoàng hậu là NỮ: dáng nu (trẻ, trung niên), ba_gia (bà cụ), be_gai (bé gái). Tuyệt đối không cho nhân vật nữ dáng nam hoặc gia (gia = ông cụ).
+18. PHÉP LẠ: nhân vật lớn bổng / vươn vai thành người lớn dùng hanh_dong lon_len (các cảnh sau giữ cỡ lớn); bay về trời dùng bay_len (đang cưỡi ngựa thì bay cả ngựa), nên đặt ở troi_may.dinh_nui.
+19. ĐÁNH TRẬN: cảnh giao chiến đặt ở chien_truong (đã có sẵn bóng đoàn quân); thêm 1-2 nhân vật lính đối phương có tên (vd "Lính giặc"), mặc non_sat + ao_giap, hét hoặc xông lên rồi bị đánh thì nga {sao_choang}; người hùng dam hoặc cam vũ khí (guom, giao, tre_nga) với {va_cham} / {tia_sang}.
+20. Lời về đời sau (nhà Lý, nhà Trần, sách vở ghi chép, đền thờ, lễ hội ngày nay) là lời của KE, không đặt vào miệng nhân vật trong truyện.
 11. DIỄN BẰNG HÀNH ĐỘNG, không để nhân vật chỉ đứng nói. Mỗi việc trong truyện phải được làm ra bằng hành động tương tác có đủ trình tự, máy tự diễn các bước chuẩn bị - tiếp cận - chạm - làm - kết thúc:
    goi_dien (áp điện thoại lên tai), xem_dien_thoai (cúi nhìn màn hình), deo_tai_nghe / thao_tai_nghe, uong (nâng cốc lên miệng), an,
    mo_cua / dong_cua, ra_cua (đi ra khỏi phòng qua cửa), vao_cua (bước vào qua cửa), ngoi_ghe / dung_day, go_may_tinh (ngồi gõ laptop),
@@ -531,7 +536,7 @@ ${VI_DU_DO}
 
 ma: mã không dấu viết thường nối "_" (vd "xe_xich_lo"). ten: tên tiếng Việt có dấu. nhom: một trong ${NHOM_DO.join(', ')}.
 XE CHỞ NGƯỜI ĐƯỢC (xe đạp, xe máy, xích lô, ô tô, xe buýt, thuyền, xe bò, kiệu...): vẽ nhìn NGANG, đầu xe quay sang PHẢI, và điền xe_kieu ("dap" nếu người lái đạp chân, "ngoi" nếu ngồi yên), xe_lai = [x, z] điểm giữa mặt yên người lái, xe_khach = [x, z] mặt ghế khách (mảng rỗng nếu không chở khách), xe_banh = [tâm_x, tâm_z, bán_kính, ...] mỗi bánh 3 số (mảng rỗng nếu không có bánh), xe_truoc = true nếu thân xe che trước người ngồi (ô tô, xe buýt). Đồ không phải xe: xe_kieu = "khong", các mảng rỗng.
-thoi_dai: "hien_dai" (đồ chỉ có thời nay), "co_xua" (đồ chỉ có thời xưa) hoặc "moi_thoi". noi: các nơi hay có món này, chọn trong: nha, chung_cu, quan_ca_phe, van_phong, truong, duong, cong_vien, cho.`
+thoi_dai: "hien_dai" (đồ chỉ có thời nay), "co_xua" (đồ chỉ có thời xưa) hoặc "moi_thoi". noi: các nơi hay có món này, chọn trong: nha, chung_cu, quan_ca_phe, van_phong, truong, duong, cong_vien, cho, lang_que, cung_dien, chien_truong, troi_may.`
 
 export async function agentVeDaoCu(moTa: string[]): Promise<KetQua<{ daoCu: DaoCuMoi[] }>> {
   const ds = moTa.map((m) => cat(m, 220)).filter(Boolean).slice(0, 4)
@@ -583,7 +588,7 @@ export async function agentVeDaoCu(moTa: string[]): Promise<KetQua<{ daoCu: DaoC
     return [{
       ma, ten: cat(d.ten, 60) || ma, nhom: NHOM_DO.includes(String(d.nhom)) ? String(d.nhom) : 'dac_biet', cam: !!d.cam,
       thoiDai: ['hien_dai', 'co_xua', 'moi_thoi'].includes(String(d.thoi_dai)) ? String(d.thoi_dai) : 'moi_thoi',
-      noi: (d.noi ?? []).map((x) => cat(x, 20)).filter((x) => ['nha', 'chung_cu', 'quan_ca_phe', 'van_phong', 'truong', 'duong', 'cong_vien', 'cho'].includes(x)),
+      noi: (d.noi ?? []).map((x) => cat(x, 20)).filter((x) => ['nha', 'chung_cu', 'quan_ca_phe', 'van_phong', 'truong', 'duong', 'cong_vien', 'cho', 'lang_que', 'cung_dien', 'chien_truong', 'troi_may'].includes(x)),
       hinh,
       ...(xe ? { xe, cam: false } : {}),
     }]
