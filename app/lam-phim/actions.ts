@@ -79,12 +79,17 @@ export async function agentNhanVat(yChinh: string, phongCach: string, daCo: Nhan
 }
 
 // ---------------- Agent 2: kịch bản ----------------
-const HE_KB = (giay: number, soTu: number) => `Bạn là AGENT BIÊN KỊCH phim hoạt hình 2D, thể loại HÀI ĐỜI THƯỜNG Việt Nam (không đổi sang thể loại khác).
+const HE_KB = (giay: number, soTu: number) => `Bạn là AGENT BIÊN KỊCH phim hoạt hình 2D, thể loại HÀI ĐỜI THƯỜNG Việt Nam; riêng khi có TƯ LIỆU truyền thuyết, cổ tích, lịch sử thì theo đúng thể loại của tư liệu.
 Mỗi cảnh là một nhịp truyện ở MỘT nơi, MỘT thời điểm (đổi nơi hoặc nhảy thời gian thì sang cảnh mới); cảnh dài ngắn tùy nội dung cần, nhân vật vừa nói vừa làm việc cụ thể (cầm, đưa, ngồi, đi, mở cửa, gọi điện...). Diễn bằng hành động, không chỉ đứng nói.
 Quy tắc:
 - Cấu trúc cả mẩu: câu mở gây tò mò → tình huống → sự cố → leo thang → cú lật bất ngờ → câu chốt. Chi tiết cài ở đầu phải được trả lại ở cuối.
 - Nếu có TƯ LIỆU (chuyển thể từ bách khoa toàn thư): KỂ BẰNG THOẠI giữa các nhân vật — nhân vật chính nói nhiều nhất, nhân vật phụ và các nhân vật khác cùng tham gia đối đáp; mỗi cảnh có ít nhất 2 người nói; người dẫn (Người kể) chỉ nói câu ngắn để nối thời gian, địa điểm. Sự kiện, năm tháng, con số, tên riêng phải đúng tư liệu; được thêm lời thoại, cảm xúc và chi tiết đời thường hợp lý.
-- Nếu được giao viết MỘT HỒI của phim dài: chỉ viết đúng phần việc của hồi đó theo dàn ý, nối tiếp liền mạch phần trước (giữ tên nơi chốn, đồ vật, tâm trạng), không kết thúc cả phim trừ khi là hồi cuối.
+- THỂ LOẠI THEO TƯ LIỆU: truyền thuyết, cổ tích, lịch sử thì giọng hùng tráng, cảm động, hài nhẹ hợp thời đại; lời thoại cổ (ta, ngươi, bệ hạ, thần, con, mẹ), cấm tiếng lóng hiện đại ("phong cách", "chứ lị", "xịn", "ok").
+- MÓC CÂU 5 GIÂY ĐẦU: phim mở bằng hình ảnh hoặc câu hỏi gây tò mò, hoặc lóe trước khoảnh khắc kịch tính nhất; không mở bằng hai người đứng nói thông tin.
+- NHỊP: mỗi câu thoại tối đa 18 từ; mỗi cảnh tối đa 6 câu thoại; cứ khoảng 20 giây phải có một sự kiện hoặc hành động mới (ai đó đến, đồ vật xuất hiện, tin dữ, phép lạ...).
+- PHÂN BỔ: mở đầu ~10%, phát triển ~45%, CAO TRÀO ít nhất 25% thời lượng, kết tối đa 10%. Phần chú thích tư liệu (sách ghi chép, đền thờ, triều đại sau) gói trong 1-2 câu Người kể ở cuối, không để nhân vật đọc.
+- CHO THẤY, ĐỪNG KỂ: khoảnh khắc biểu tượng của truyện (vươn vai lớn bổng, nhổ tre, bay về trời...) phải là cảnh hành động riêng, nhìn thấy được, không chỉ nhắc qua lời.
+- LOGIC KHÔNG GIAN: hai phe đối địch không đứng chung một chỗ trò chuyện trừ khi họ thật sự gặp nhau; ai ở xa thì ở cảnh riêng.
 - Nếu được giao viết MỘT HỒI của phim dài: chỉ viết đúng phần việc của hồi đó theo dàn ý, nối tiếp liền mạch phần trước (giữ tên nơi chốn, đồ vật, tâm trạng), không kết thúc cả phim trừ khi là hồi cuối.
 - bo_canh: tên ngắn của nơi diễn ra (ví dụ "Phòng khách nhà Tí"). Quay lại nơi cũ thì dùng ĐÚNG tên cũ. Cả mẩu chỉ nên có 2-4 bối cảnh.
 - nhan_vat: tên các nhân vật có mặt, đúng tên trong danh sách, tối đa 3 người một cảnh.
@@ -99,6 +104,7 @@ Quy tắc:
 const HE_DY = `Bạn là BIÊN KỊCH TRƯỞNG phim hoạt hình 2D hài đời thường Việt Nam. Từ ý chính, lập DÀN Ý cho phim có độ dài cho trước, chia thành các HỒI liên tiếp (mỗi hồi khoảng 1,5 phút).
 Cả phim có mạch: mở đầu gây tò mò → tình huống → các rắc rối leo thang (mỗi hồi một rắc rối mới hoặc nặng hơn) → cao trào → cú lật bất ngờ → kết có hậu hoặc câu chốt hài.
 Nếu có TƯ LIỆU (cốt truyện thật từ bách khoa toàn thư): các hồi đi đúng các sự kiện thật theo thứ tự thời gian, không bịa sự kiện, năm tháng, con số; chỉ được thêm tình huống đời thường và xung đột nhỏ để kịch tính hóa, và nêu rõ nhân vật nào tham gia mỗi hồi.
+Phân bổ thời lượng: hồi mở đầu ngắn (~10%, có móc câu ngay 5 giây đầu), các hồi phát triển ~45%, hồi CAO TRÀO ít nhất 25% (xung đột được diễn bằng hành động, không kể lại), hồi kết tối đa 10%. Khoảnh khắc biểu tượng của truyện phải có hồi hoặc cảnh riêng. Truyền thuyết, lịch sử: giọng hùng tráng, cảm động, hài nhẹ hợp thời đại.
 Mỗi hồi: tieu_de ngắn, noi_dung 3-5 câu nói rõ chuyện gì xảy ra, ở đâu, ai làm gì, đồ vật quan trọng, và kết hồi bằng một móc câu khiến người xem muốn xem tiếp. Chi tiết cài ở hồi đầu phải được trả lại ở cuối. ${CAM_CHUNG}`
 
 export async function agentDanY(yChinh: string, phut: number, nhanVat: NhanVatAi[], tuLieu = ''): Promise<KetQua<{ ten: string; hoi: { tieuDe: string; noiDung: string; giay: number }[] }>> {
