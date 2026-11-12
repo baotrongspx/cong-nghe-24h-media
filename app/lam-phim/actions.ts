@@ -158,6 +158,7 @@ export async function agentKichBan(yChinh: string, soCanh: number, giay: number,
     .filter((c) => c.hanhDong || c.loi)
     .slice(0, 30)
   if (!canh.length) return { ok: false, thongBao: 'Agent chưa viết được cảnh nào, hãy thử lại' }
+  if (canh.some((c) => c.loi.length > 20 && !CO_DAU.test(c.loi))) return { ok: false, thongBao: 'AI trả về lời thoại mất dấu, hãy bấm lại' }
   return { ok: true, ten: cat(r.kq.ten, 100), canh }
 }
 
@@ -369,6 +370,7 @@ Quy tắc dàn dựng:
 6. Góc máy có chủ đích: mở đầu mỗi khu vực bằng toan hoặc rat_rong; đối thoại xen trung, can, qua_vai; khoảnh khắc sốc dùng dac_ta hoặc day_vao; nhân vật yếu thế goc_cao, oai vệ goc_thap; người chạy dùng lia; kết phim keo_ra.
 7. Hiệu ứng chỉ dùng khi đúng cảm xúc (mồ hôi khi bối rối, tim khi yêu, khói khi tức...). Khoảng một nửa số dòng có hành động, không lạm dụng.
 8. Dòng chỉ có hành động, không lời: loi = "" và dien = người làm.
+15. ĐÚNG THỜI ĐẠI: truyện cổ tích, truyền thuyết, lịch sử trước thời hiện đại thì TUYỆT ĐỐI không dùng đồ hiện đại (xe máy, ô tô, xe đạp, điện thoại, micro, máy tính, laptop, tivi, sách in, hồ sơ, ly trà sữa...) và không đặt cảnh ở văn phòng, phòng họp, quán cà phê, chung cư, phố có ô tô; chọn nơi hợp nhất trong danh mục (bãi cỏ, hồ nước, chợ, hẻm làng, phòng ngủ đơn sơ) và hành động bằng tay không (chỉ, vẫy, gật, chào, đẩy, nhảy, chạy...).
 11. DIỄN BẰNG HÀNH ĐỘNG, không để nhân vật chỉ đứng nói. Mỗi việc trong truyện phải được làm ra bằng hành động tương tác có đủ trình tự, máy tự diễn các bước chuẩn bị - tiếp cận - chạm - làm - kết thúc:
    goi_dien (áp điện thoại lên tai), xem_dien_thoai (cúi nhìn màn hình), deo_tai_nghe / thao_tai_nghe, uong (nâng cốc lên miệng), an,
    mo_cua / dong_cua, ra_cua (đi ra khỏi phòng qua cửa), vao_cua (bước vào qua cửa), ngoi_ghe / dung_day, go_may_tinh (ngồi gõ laptop),
@@ -479,6 +481,8 @@ export async function agentLamPhimMay(phim: { ten: string; nhanVat: { ten: strin
     })
   }
   if (!dong.length) return { ok: false, thongBao: 'AI chưa chuyển được kịch bản, hãy bấm thử lại' }
+  const khongDau = dong.filter((d) => d.loi.length > 15 && !CO_DAU.test(d.loi)).length
+  if (khongDau > 0) return { ok: false, thongBao: `AI trả về ${khongDau} câu thoại mất dấu, đang thử lại` }
   return { ok: true, nhanVat, dong }
 }
 
